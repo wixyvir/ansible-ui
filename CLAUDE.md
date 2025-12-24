@@ -16,25 +16,54 @@ The primary goal is to provide DevOps teams and system administrators with an in
 
 ## Technology Stack
 
-### Frontend Framework
+### Frontend
 - **React 18.3.1**: Modern UI library with hooks and functional components
 - **TypeScript 5.6**: Type-safe development with enhanced IDE support
 - **Vite 6**: Lightning-fast build tool and dev server
-
-### Styling
 - **Tailwind CSS 3.4**: Utility-first CSS framework
-- **Dark Mode Design**: Optimized for terminal-friendly aesthetics with slate color palette
-
-### Icons
-- **Lucide React 0.460**: Clean, consistent icon library for server and calendar icons
-
-### Development Tools
+- **Lucide React 0.460**: Clean, consistent icon library
 - **ESLint**: Code linting and quality enforcement
-- **PostCSS**: CSS processing with Autoprefixer
+
+### Backend
+- **Python 3.12+**: Modern Python with performance improvements
+- **Django 5.2**: High-level web framework
+- **Django REST Framework 3.16**: Powerful toolkit for building Web APIs
+- **Poetry**: Dependency management and packaging
+- **SQLite**: Development database (PostgreSQL for production)
+- **django-cors-headers**: CORS support for frontend communication
 
 ## Architecture
 
-### Component Structure
+### Project Structure
+
+```
+ansible-ui/
+├── frontend/               # React frontend application
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── types/         # TypeScript type definitions
+│   │   ├── App.tsx        # Main application component
+│   │   └── main.tsx       # React entry point
+│   └── package.json       # Frontend dependencies
+│
+├── backend/               # Django REST API backend
+│   ├── ansible_ui/       # Django project configuration
+│   │   ├── settings.py   # Django settings (CORS, DRF)
+│   │   └── urls.py       # Root URL routing
+│   ├── api/              # REST API Django app
+│   │   ├── views.py      # API view implementations
+│   │   ├── urls.py       # API URL routing
+│   │   ├── models.py     # Database models
+│   │   └── serializers.py # DRF serializers
+│   ├── manage.py         # Django management script
+│   ├── pyproject.toml    # Poetry dependencies
+│   └── README.md         # Backend documentation
+│
+├── CLAUDE.md             # This file
+└── .gitignore            # Git ignore patterns
+```
+
+### Frontend Component Structure
 
 ```
 frontend/src/
@@ -52,14 +81,47 @@ frontend/src/
 
 ### Data Model
 
+The application uses a hierarchical data structure to organize Ansible execution data:
+
+```
+Log (uploaded Ansible log file)
+ └── Host (servers in the log)
+      └── Play (play executions on the host)
+           └── TaskSummary (task counts: ok/changed/failed)
+```
+
+#### Log
+Represents an uploaded Ansible log file:
+```typescript
+interface Log {
+  id: string;           // Unique identifier
+  title: string;        // User-provided log title
+  uploaded_at: string;  // Upload timestamp
+  hosts: Host[];        // Array of hosts in this log
+}
+```
+
+**Backend Model** (Django):
+- `title`: CharField - Log title
+- `uploaded_at`: DateTimeField - Auto-set on creation
+- `raw_content`: TextField - Full raw log content for re-parsing
+- Cascading delete: Deleting a log removes all associated hosts and plays
+
 #### Host
 Represents a single server with its associated plays:
 ```typescript
 interface Host {
+  id: string;           // Unique identifier
   hostname: string;     // Server hostname/FQDN
   plays: Play[];        // Array of plays executed on this host
 }
 ```
+
+**Backend Model** (Django):
+- `log`: ForeignKey to Log - Every host belongs to a log
+- `hostname`: CharField - Indexed for performance
+- `unique_together`: Hostname must be unique within each log
+- Same hostname can appear in different logs
 
 #### Play
 Represents a single Ansible play execution:
@@ -72,6 +134,14 @@ interface Play {
   tasks: TaskSummary;   // Task execution counts for this play
 }
 ```
+
+**Backend Model** (Django):
+- `host`: ForeignKey to Host
+- `name`: CharField - Play name
+- `date`: DateTimeField - Execution timestamp
+- `status`: CharField with choices (ok/changed/failed)
+- `tasks_ok`, `tasks_changed`, `tasks_failed`: IntegerFields
+- `tasks` property returns TaskSummary dict for API serialization
 
 #### TaskSummary
 Aggregated task results for a play:
@@ -140,6 +210,8 @@ type PlayStatus = 'ok' | 'changed' | 'failed';
 
 ### Getting Started
 
+#### Frontend Setup
+
 1. **Navigate to Frontend Directory**
    ```bash
    cd frontend
@@ -150,35 +222,78 @@ type PlayStatus = 'ok' | 'changed' | 'failed';
    npm install
    ```
 
-3. **Run Linting**
-   ```bash
-   npm run lint
-   ```
-   Checks code quality with ESLint
-
-4. **Start Development Server**
+3. **Start Development Server**
    ```bash
    npm run dev
    ```
    Server starts at `http://localhost:5173`
 
-5. **Build for Production**
-   ```bash
-   npm run build
-   ```
-   Outputs to `dist/` directory
+#### Backend Setup
 
-6. **Preview Production Build**
+1. **Navigate to Backend Directory**
    ```bash
-   npm run preview
+   cd backend
    ```
 
-### Project Scripts
+2. **Install Poetry** (if not already installed)
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
+
+3. **Install Dependencies**
+   ```bash
+   poetry install
+   ```
+
+4. **Run Database Migrations**
+   ```bash
+   poetry run python manage.py migrate
+   ```
+
+5. **Start Development Server**
+   ```bash
+   poetry run python manage.py runserver
+   ```
+   Server starts at `http://localhost:8000`
+
+### Development Workflow
+
+**Running Both Servers**
+
+For full-stack development, run both servers simultaneously:
+
+Terminal 1 (Frontend):
+```bash
+cd frontend
+npm run dev
+```
+
+Terminal 2 (Backend):
+```bash
+cd backend
+poetry run python manage.py runserver
+```
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Backend API: `http://localhost:8000/api/`
+
+### Frontend Scripts
 
 - `npm run dev` - Start Vite dev server with hot reload
 - `npm run build` - TypeScript compilation + production build
 - `npm run lint` - Run ESLint on codebase
 - `npm run preview` - Preview production build locally
+
+### Backend Scripts
+
+- `poetry run python manage.py runserver` - Start Django dev server
+- `poetry run python manage.py migrate` - Run database migrations
+- `poetry run python manage.py makemigrations` - Create new migrations
+- `poetry run python manage.py createsuperuser` - Create admin user
+- `poetry run pytest` - Run tests (future)
+- `poetry run black .` - Format code (future)
+- `poetry run flake8` - Lint code (future)
 
 ### Mock Data
 
@@ -189,9 +304,9 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - Varied task counts per play (5-18 tasks)
 - Execution timestamps showing relative times for each play
 
-## Current Implementation (v0.1.0)
+## Current Implementation
 
-### Features
+### v0.1.0 - Frontend Foundation
 - Single-page display of Ansible execution results by host
 - Host cards with status indicators based on play outcomes
 - Multiple plays displayed per host with individual task summaries
@@ -199,42 +314,106 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - Play names and execution timestamps
 - Responsive grid layout
 - Dark mode design with nested card hierarchy
+- Static mock data (no backend integration yet)
 
-### Limitations
-- Static mock data (no backend integration)
-- No historical play logs
+### v0.2.0 - Backend Foundation (Current)
+- **Django REST Framework Backend**: Python 3.12 with Django 5.2
+- **Poetry Dependency Management**: Modern Python packaging and dependency resolution
+- **API Structure**: RESTful API architecture with `/api/` prefix
+- **Database Models**: Log, Host, and Play models implemented
+- **DRF Serializers**: Complete serializers for all models with frontend compatibility
+- **CORS Configuration**: Frontend-backend communication enabled
+- **SQLite Database**: Initialized with Django migrations
+- **Development Ready**: Comprehensive documentation and setup guides
+
+### Database Models
+
+**Log Model** - Represents uploaded Ansible log files
+- Fields: `title`, `uploaded_at`, `raw_content`
+- One-to-many relationship with Host
+- Cascading deletes for data integrity
+
+**Host Model** - Represents servers in logs
+- Fields: `hostname`, `log` (ForeignKey), `created_at`, `updated_at`
+- Unique hostname per log (same hostname can appear in different logs)
+- One-to-many relationship with Play
+
+**Play Model** - Represents Ansible play executions
+- Fields: `name`, `date`, `status`, `tasks_ok`, `tasks_changed`, `tasks_failed`
+- ForeignKey to Host
+- Status choices: ok, changed, failed
+- `tasks` property returns TaskSummary dict
+
+### Available Serializers
+
+- **LogSerializer**: Full log with nested hosts
+- **LogListSerializer**: Lightweight log listing
+- **LogCreateSerializer**: For uploading new logs
+- **HostSerializer**: Full host with nested plays
+- **HostListSerializer**: Lightweight host listing
+- **PlaySerializer**: Full play with task summary
+- **PlayCreateSerializer**: For creating plays
+- **TaskSummarySerializer**: Task counts (ok/changed/failed)
+
+### Current API Endpoints
+
+**GET** `/api/hello`
+- Test endpoint to verify backend is running
+- Returns: `{ "message": "Hello from Ansible UI Backend", "version": "0.2.0", "status": "running" }`
+
+### Current Limitations
+- Frontend still uses mock data (backend integration in progress)
+- No API views/endpoints for Log/Host/Play models yet
+- No Ansible log parsing yet
+- No file upload functionality
 - No filtering or search capabilities
 - No authentication or user management
 - No real-time updates
 
 ## Future Iterations
 
-### Backend Integration (v0.2.0)
-- REST API for fetching play results
-- Persistent storage (PostgreSQL or MongoDB)
-- API endpoints for CRUD operations
-- WebSocket support for real-time updates
+### v0.2.x - Backend API Endpoints (Next)
+- **API Views/ViewSets**: Implement DRF views for all models
+- **Ansible Log Parsing**: Process JSON output from ansible-playbook
+- **Data API Endpoints**:
+  - `GET /api/logs/` - List all logs
+  - `GET /api/logs/{id}/` - Get log details with hosts
+  - `POST /api/logs/` - Upload new log file
+  - `GET /api/hosts/` - List all hosts
+  - `GET /api/hosts/{id}/` - Get host details with plays
+  - `GET /api/plays/` - List all plays with filtering
+  - `GET /api/plays/{id}/` - Get play details
+- **Frontend Integration**: Replace mock data with API calls
+- **Log Parser**: Parse Ansible JSON output and populate database
 
-### Enhanced Features (v0.3.0)
+### v0.3.0 - Enhanced Features
 - Historical play logs with pagination
-- Search and filter capabilities
-- Detailed task-level information
-- Expandable server cards with task details
-- Export functionality (JSON, CSV)
+- Search and filter capabilities (by hostname, status, date)
+- Detailed task-level information display
+- Expandable server cards with full task details
+- Export functionality (JSON, CSV formats)
+- Improved error handling and user feedback
 
-### Advanced Features (v0.4.0+)
-- User authentication and authorization
-- Multi-user support with role-based access
-- Play scheduling and triggering
-- Email/Slack notifications for failures
+### v0.4.0+ - Advanced Features
+- User authentication and authorization (JWT or session-based)
+- Multi-user support with role-based access control
+- Real-time updates with WebSocket support
+- Email/Slack notifications for play failures
 - Dashboard with analytics and trends
+- Play history and comparison views
 - Dark/Light mode toggle
-- Customizable views and preferences
+- Customizable views and user preferences
+- PostgreSQL migration for production
+- Docker containerization
 
 ## File Organization
 
-### Configuration Files
-- [frontend/package.json](frontend/package.json) - Dependencies and scripts
+### Root Files
+- [CLAUDE.md](CLAUDE.md) - This project documentation file
+- [.gitignore](.gitignore) - Git ignore patterns (frontend, backend, Python)
+
+### Frontend Configuration Files
+- [frontend/package.json](frontend/package.json) - NPM dependencies and scripts
 - [frontend/vite.config.ts](frontend/vite.config.ts) - Vite build configuration
 - [frontend/eslint.config.js](frontend/eslint.config.js) - ESLint configuration with TypeScript support
 - [frontend/tsconfig.json](frontend/tsconfig.json) - TypeScript project references
@@ -242,9 +421,8 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - [frontend/tsconfig.node.json](frontend/tsconfig.node.json) - Node scripts TypeScript config
 - [frontend/tailwind.config.js](frontend/tailwind.config.js) - Tailwind CSS configuration
 - [frontend/postcss.config.js](frontend/postcss.config.js) - PostCSS plugins
-- [.gitignore](.gitignore) - Git ignore patterns
 
-### Source Files
+### Frontend Source Files
 - [frontend/src/main.tsx](frontend/src/main.tsx) - React application entry point
 - [frontend/src/App.tsx](frontend/src/App.tsx) - Main application component with mock host data
 - [frontend/src/index.css](frontend/src/index.css) - Global styles and Tailwind directives
@@ -254,6 +432,23 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - [frontend/src/components/PlayHeader.tsx](frontend/src/components/PlayHeader.tsx) - (Legacy) Play title and date component
 - [frontend/src/components/ServerCard.tsx](frontend/src/components/ServerCard.tsx) - Host card displaying multiple plays
 - [frontend/src/components/StatusBadge.tsx](frontend/src/components/StatusBadge.tsx) - Status indicator badge
+
+### Backend Configuration Files
+- [backend/pyproject.toml](backend/pyproject.toml) - Poetry dependencies and project metadata
+- [backend/manage.py](backend/manage.py) - Django management command-line utility
+- [backend/README.md](backend/README.md) - Backend-specific documentation
+
+### Backend Source Files
+- [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py) - Django settings (apps, middleware, CORS, DRF)
+- [backend/ansible_ui/urls.py](backend/ansible_ui/urls.py) - Root URL configuration
+- [backend/ansible_ui/wsgi.py](backend/ansible_ui/wsgi.py) - WSGI application
+- [backend/ansible_ui/asgi.py](backend/ansible_ui/asgi.py) - ASGI application
+- [backend/api/views.py](backend/api/views.py) - API view implementations (hello endpoint)
+- [backend/api/urls.py](backend/api/urls.py) - API URL routing
+- [backend/api/models.py](backend/api/models.py) - Database models (Log, Host, Play)
+- [backend/api/serializers.py](backend/api/serializers.py) - DRF serializers for all models
+- [backend/api/tests.py](backend/api/tests.py) - Test cases (future)
+- [backend/api/migrations/](backend/api/migrations/) - Database migration files
 
 ## Design Decisions
 
@@ -283,6 +478,22 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - Tree-shakeable (only import icons you use)
 - Active maintenance and updates
 - Better than Font Awesome for React projects
+
+### Why Django REST Framework?
+- Mature, production-ready framework for building APIs
+- Excellent serialization and validation tools
+- Built-in browsable API for development
+- Strong authentication and permissions system
+- Large ecosystem and community support
+- Works seamlessly with Django ORM
+
+### Why Poetry over pip/requirements.txt?
+- Deterministic dependency resolution
+- Automatic virtual environment management
+- Modern pyproject.toml standard
+- Separates development and production dependencies
+- Lockfile ensures reproducible builds
+- Better dependency conflict resolution
 
 ### ESLint Configuration
 The project uses modern ESLint flat config (eslint.config.js) with:
@@ -349,13 +560,15 @@ When extending this project, follow these guidelines:
 
 ## Troubleshooting
 
-### Port Already in Use
+### Frontend Issues
+
+**Port Already in Use**
 If port 5173 is occupied:
 ```bash
 npm run dev -- --port 3000
 ```
 
-### TypeScript Errors
+**TypeScript Errors**
 Ensure all dependencies are installed:
 ```bash
 cd frontend
@@ -363,8 +576,39 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-### Tailwind Styles Not Applying
+**Tailwind Styles Not Applying**
 Check that [frontend/src/index.css](frontend/src/index.css) is imported in [frontend/src/main.tsx](frontend/src/main.tsx) and contains the Tailwind directives.
+
+### Backend Issues
+
+**Port 8000 Already in Use**
+Specify a different port:
+```bash
+poetry run python manage.py runserver 8080
+```
+Remember to update CORS settings if you change the port.
+
+**Poetry Virtual Environment Issues**
+Remove and recreate the virtual environment:
+```bash
+cd backend
+poetry env remove python3.12
+poetry install
+```
+
+**CORS Errors**
+If frontend can't connect to backend:
+1. Verify backend is running on `http://localhost:8000`
+2. Check `CORS_ALLOWED_ORIGINS` in [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py)
+3. Ensure `corsheaders` middleware is configured
+
+**Database Migration Errors**
+Reset the database (development only):
+```bash
+cd backend
+rm db.sqlite3
+poetry run python manage.py migrate
+```
 
 ## License
 
