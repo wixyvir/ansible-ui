@@ -120,8 +120,8 @@ class TaskCountRangeFilter(admin.SimpleListFilter):
 class HostInline(admin.TabularInline):
     """Inline admin for hosts within a log."""
     model = Host
-    fields = ['hostname', 'play_count_display', 'created_at']
-    readonly_fields = ['play_count_display', 'created_at']
+    fields = ['id', 'hostname', 'play_count_display', 'created_at']
+    readonly_fields = ['id', 'play_count_display', 'created_at']
     extra = 0
     can_delete = True
 
@@ -137,7 +137,8 @@ class HostInline(admin.TabularInline):
 class PlayInline(admin.TabularInline):
     """Inline admin for plays within a host."""
     model = Play
-    fields = ['name', 'date', 'status', 'tasks_ok', 'tasks_changed', 'tasks_failed']
+    fields = ['id', 'name', 'date', 'status', 'tasks_ok', 'tasks_changed', 'tasks_failed']
+    readonly_fields = ['id']
     extra = 0
     can_delete = True
     ordering = ['-date']
@@ -151,7 +152,7 @@ class LogAdmin(admin.ModelAdmin):
     list_display = ['title', 'uploaded_at', 'host_count', 'total_plays', 'has_failures']
     list_filter = ['uploaded_at', HasFailuresFilter]
     search_fields = ['title', 'hosts__hostname']
-    readonly_fields = ['uploaded_at', 'host_count', 'total_plays']
+    readonly_fields = ['id', 'uploaded_at', 'host_count', 'total_plays']
     date_hierarchy = 'uploaded_at'
     inlines = [HostInline]
     ordering = ['-uploaded_at']
@@ -199,7 +200,7 @@ class HostAdmin(admin.ModelAdmin):
     list_display = ['hostname', 'log_title', 'play_count', 'status_summary', 'latest_play_date', 'created_at']
     list_filter = ['log', 'created_at', PlayStatusFilter]
     search_fields = ['hostname', 'log__title']
-    readonly_fields = ['log', 'created_at', 'updated_at', 'play_count', 'status_summary']
+    readonly_fields = ['id', 'log', 'created_at', 'updated_at', 'play_count', 'status_summary']
     date_hierarchy = 'created_at'
     inlines = [PlayInline]
     ordering = ['hostname']
@@ -264,12 +265,12 @@ class PlayAdmin(admin.ModelAdmin):
     list_display = ['name', 'hostname', 'log_title', 'date', 'status_badge', 'task_summary', 'total_tasks']
     list_filter = ['status', 'date', 'host', 'host__log', HasFailedTasksFilter, TaskCountRangeFilter]
     search_fields = ['name', 'host__hostname', 'host__log__title']
-    readonly_fields = ['host', 'created_at', 'updated_at', 'total_tasks']
+    readonly_fields = ['id', 'host', 'created_at', 'updated_at', 'total_tasks']
     date_hierarchy = 'date'
     ordering = ['-date']
     fieldsets = [
         ('Play Information', {
-            'fields': ['host', 'name', 'date', 'status']
+            'fields': ['id', 'host', 'name', 'date', 'status']
         }),
         ('Task Summary', {
             'fields': ['tasks_ok', 'tasks_changed', 'tasks_failed', 'total_tasks']
