@@ -1,9 +1,11 @@
+import uuid
 from django.db import models
 
 
 class Log(models.Model):
     """Represents an Ansible log file uploaded by the frontend."""
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     raw_content = models.TextField(blank=True, help_text="Raw log file content")
@@ -20,6 +22,7 @@ class Log(models.Model):
 class Host(models.Model):
     """Represents a server/host that Ansible plays are executed on."""
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     log = models.ForeignKey(
         Log,
         on_delete=models.CASCADE,
@@ -48,6 +51,7 @@ class Play(models.Model):
         ('failed', 'Failed'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     host = models.ForeignKey(
         Host,
         on_delete=models.CASCADE,
