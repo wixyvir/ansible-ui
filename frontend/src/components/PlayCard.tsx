@@ -7,6 +7,17 @@ interface PlayCardProps {
   play: Play;
 }
 
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function PlayCard({ play }: PlayCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -32,7 +43,7 @@ export function PlayCard({ play }: PlayCardProps) {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-slate-400 text-xs">
             <Calendar className="w-3.5 h-3.5" />
-            <span>{play.date}</span>
+            <span>{formatDate(play.date)}</span>
           </div>
           <button
             onClick={handleToggle}

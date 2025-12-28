@@ -357,13 +357,76 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 
 ### Current API Endpoints
 
-**GET** `/api/hello`
-- Test endpoint to verify backend is running
-- Returns: `{ "message": "Hello from Ansible UI Backend", "version": "0.2.0", "status": "running" }`
+The backend uses Django REST Framework with a `LogViewSet` that provides read-only access to logs.
+
+#### Logs
+
+**GET** `/api/logs/{id}/`
+- Retrieve a specific log with all hosts and plays
+- Uses `prefetch_related` for optimized nested queries
+- Response includes nested hosts with their plays
+
+**Example Response:**
+```json
+{
+  "id": "uuid-string",
+  "title": "Deployment Log",
+  "uploaded_at": "2024-01-15T10:30:00Z",
+  "hosts": [
+    {
+      "id": "uuid-string",
+      "hostname": "web-01.example.com",
+      "plays": [
+        {
+          "id": "uuid-string",
+          "name": "Setup Web Server",
+          "date": "2024-01-15T10:30:00Z",
+          "status": "ok",
+          "tasks": {
+            "ok": 10,
+            "changed": 3,
+            "failed": 0
+          }
+        }
+      ]
+    }
+  ],
+  "host_count": 1
+}
+```
+
+**GET** `/api/logs/{id}/hosts/`
+- List all hosts for a specific log
+- Custom action endpoint on the LogViewSet
+- Returns hosts with their plays (without log metadata)
+
+**Example Response:**
+```json
+[
+  {
+    "id": "uuid-string",
+    "hostname": "web-01.example.com",
+    "plays": [
+      {
+        "id": "uuid-string",
+        "name": "Setup Web Server",
+        "date": "2024-01-15T10:30:00Z",
+        "status": "changed",
+        "tasks": {
+          "ok": 8,
+          "changed": 5,
+          "failed": 0
+        }
+      }
+    ]
+  }
+]
+```
 
 ### Current Limitations
 - Frontend still uses mock data (backend integration in progress)
-- No API views/endpoints for Log/Host/Play models yet
+- Log list endpoint not yet implemented (`GET /api/logs/`)
+- Log creation/upload endpoint not yet implemented (`POST /api/logs/`)
 - No Ansible log parsing yet
 - No file upload functionality
 - No filtering or search capabilities
@@ -373,16 +436,14 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 ## Future Iterations
 
 ### v0.2.x - Backend API Endpoints (Next)
-- **API Views/ViewSets**: Implement DRF views for all models
-- **Ansible Log Parsing**: Process JSON output from ansible-playbook
-- **Data API Endpoints**:
-  - `GET /api/logs/` - List all logs
-  - `GET /api/logs/{id}/` - Get log details with hosts
-  - `POST /api/logs/` - Upload new log file
+- **Remaining API Endpoints**:
+  - `GET /api/logs/` - List all logs (not yet implemented)
+  - `POST /api/logs/` - Upload new log file (not yet implemented)
   - `GET /api/hosts/` - List all hosts
   - `GET /api/hosts/{id}/` - Get host details with plays
   - `GET /api/plays/` - List all plays with filtering
   - `GET /api/plays/{id}/` - Get play details
+- **Ansible Log Parsing**: Process JSON output from ansible-playbook
 - **Frontend Integration**: Replace mock data with API calls
 - **Log Parser**: Parse Ansible JSON output and populate database
 
@@ -443,7 +504,7 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - [backend/ansible_ui/urls.py](backend/ansible_ui/urls.py) - Root URL configuration
 - [backend/ansible_ui/wsgi.py](backend/ansible_ui/wsgi.py) - WSGI application
 - [backend/ansible_ui/asgi.py](backend/ansible_ui/asgi.py) - ASGI application
-- [backend/api/views.py](backend/api/views.py) - API view implementations (hello endpoint)
+- [backend/api/views.py](backend/api/views.py) - API view implementations (LogViewSet)
 - [backend/api/urls.py](backend/api/urls.py) - API URL routing
 - [backend/api/models.py](backend/api/models.py) - Database models (Log, Host, Play)
 - [backend/api/serializers.py](backend/api/serializers.py) - DRF serializers for all models

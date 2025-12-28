@@ -89,25 +89,134 @@ For more installation options, visit: https://python-poetry.org/docs/#installati
 
 ## API Endpoints
 
-### Hello Endpoint
+The backend uses Django REST Framework with a router-based URL configuration. All endpoints are prefixed with `/api/`.
 
-**URL**: `/api/hello`
+### Logs
+
+#### Get Log Details
+
+**URL**: `/api/logs/{id}/`
 **Method**: `GET`
-**Description**: Simple endpoint to verify the backend is running
+**Description**: Retrieve a specific log with all hosts and plays
 
 **Example Request**:
 ```bash
-curl http://localhost:8000/api/hello
+curl http://localhost:8000/api/logs/550e8400-e29b-41d4-a716-446655440000/
 ```
 
 **Example Response**:
 ```json
 {
-  "message": "Hello from Ansible UI Backend",
-  "version": "0.2.0",
-  "status": "running"
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Deployment Log",
+  "uploaded_at": "2024-01-15T10:30:00Z",
+  "hosts": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "hostname": "web-01.example.com",
+      "plays": [
+        {
+          "id": "770e8400-e29b-41d4-a716-446655440002",
+          "name": "Setup Web Server",
+          "date": "2024-01-15T10:30:00Z",
+          "status": "ok",
+          "tasks": {
+            "ok": 10,
+            "changed": 3,
+            "failed": 0
+          }
+        }
+      ]
+    }
+  ],
+  "host_count": 1
 }
 ```
+
+#### Get Log Hosts
+
+**URL**: `/api/logs/{id}/hosts/`
+**Method**: `GET`
+**Description**: List all hosts for a specific log with their plays
+
+**Example Request**:
+```bash
+curl http://localhost:8000/api/logs/550e8400-e29b-41d4-a716-446655440000/hosts/
+```
+
+**Example Response**:
+```json
+[
+  {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "hostname": "web-01.example.com",
+    "plays": [
+      {
+        "id": "770e8400-e29b-41d4-a716-446655440002",
+        "name": "Setup Web Server",
+        "date": "2024-01-15T10:30:00Z",
+        "status": "changed",
+        "tasks": {
+          "ok": 8,
+          "changed": 5,
+          "failed": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": "660e8400-e29b-41d4-a716-446655440002",
+    "hostname": "web-02.example.com",
+    "plays": [
+      {
+        "id": "770e8400-e29b-41d4-a716-446655440003",
+        "name": "Setup Web Server",
+        "date": "2024-01-15T10:31:00Z",
+        "status": "ok",
+        "tasks": {
+          "ok": 13,
+          "changed": 0,
+          "failed": 0
+        }
+      }
+    ]
+  }
+]
+```
+
+### Response Data Types
+
+#### Log
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| title | string | Log title |
+| uploaded_at | ISO datetime | Upload timestamp |
+| hosts | array | List of hosts (nested) |
+| host_count | integer | Number of hosts |
+
+#### Host
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| hostname | string | Server hostname/FQDN |
+| plays | array | List of plays (nested) |
+
+#### Play
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| name | string | Play name |
+| date | ISO datetime | Execution timestamp |
+| status | string | ok, changed, or failed |
+| tasks | object | Task summary counts |
+
+#### TaskSummary
+| Field | Type | Description |
+|-------|------|-------------|
+| ok | integer | Successfully completed tasks |
+| changed | integer | Tasks that made changes |
+| failed | integer | Failed tasks |
 
 ## Development Workflow
 
@@ -205,23 +314,20 @@ The backend serves the React frontend located in the `../frontend/` directory. T
 
 ## Future Development
 
-### Planned Features (v0.2.0+)
+### Planned Features
 
-- **Database Models**: Host, Play, TaskSummary models matching frontend types
+- **Remaining API Endpoints**:
+  - `GET /api/logs/` - List all logs
+  - `POST /api/logs/` - Upload new log file
+  - `GET /api/hosts/` - List all hosts
+  - `GET /api/hosts/{id}/` - Get host details with plays
+  - `GET /api/plays/` - List all plays
+  - `GET /api/plays/{id}/` - Get play details
 - **Ansible Log Parsing**: Process and store Ansible execution results
-- **CRUD Endpoints**: Full REST API for plays, hosts, and tasks
 - **Authentication**: User authentication and authorization
 - **WebSocket Support**: Real-time updates for live play monitoring
 - **File Upload**: Upload and parse Ansible log files
 - **Filtering & Search**: Query plays by status, date, hostname, etc.
-
-### Upcoming API Endpoints (Future)
-
-- `GET /api/hosts/` - List all hosts
-- `GET /api/hosts/{id}/` - Get host details with plays
-- `GET /api/plays/` - List all plays
-- `GET /api/plays/{id}/` - Get play details
-- `POST /api/logs/upload/` - Upload Ansible log file for processing
 
 ## Troubleshooting
 

@@ -15,6 +15,15 @@ export interface Play {
 }
 
 export interface Host {
+  id: string;
   hostname: string;
   plays: Play[];
+}
+
+export interface Log {
+  id: string;
+  title: string;
+  uploaded_at: string;
+  hosts: Host[];
+  host_count: number;
 }
