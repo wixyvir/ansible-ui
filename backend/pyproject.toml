@@ -16,6 +16,26 @@ pytest = "^7.4"
 pytest-django = "^4.7"
 black = "^23.12"
 flake8 = "^7.0"
+autoflake = "^2.2"
+poethepoet = "^0.24"
+
+[tool.autoflake]
+remove-all-unused-imports = true
+remove-unused-variables = true
+ignore-init-module-imports = true
+recursive = true
+
+[tool.poe.tasks]
+# Lint check commands (no modifications)
+lint-check = { shell = "autoflake --check --remove-all-unused-imports --remove-unused-variables --ignore-init-module-imports -r ." }
+flake8-check = "flake8 ."
+black-check = "black --check ."
+lint = { sequence = ["lint-check", "flake8-check", "black-check"], help = "Run all lint checks" }
+
+# Lint fix commands (modifies files)
+lint-fix = { shell = "autoflake --in-place --remove-all-unused-imports --remove-unused-variables --ignore-init-module-imports -r ." }
+black-fix = "black ."
+fix = { sequence = ["lint-fix", "black-fix"], help = "Fix all lint issues" }
 
 [build-system]
 requires = ["poetry-core"]

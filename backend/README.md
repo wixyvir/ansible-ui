@@ -145,16 +145,34 @@ Access the admin panel at `http://localhost:8000/admin/`
 poetry run pytest
 ```
 
-### Code Formatting (Future)
+### Code Quality
+
+The project uses three linting tools:
+- **autoflake**: Removes unused imports and variables
+- **flake8**: Python style guide enforcement
+- **black**: Code formatting
+
+#### Check for Issues (no modifications)
 
 ```bash
-poetry run black .
+# Run all lint checks
+poetry run poe lint
+
+# Run individual checks
+poetry run poe lint-check    # autoflake only
+poetry run poe flake8-check  # flake8 only
+poetry run poe black-check   # black only
 ```
 
-### Linting (Future)
+#### Fix Issues (modifies files)
 
 ```bash
-poetry run flake8
+# Fix all lint issues
+poetry run poe fix
+
+# Run individual fixes
+poetry run poe lint-fix   # autoflake fix
+poetry run poe black-fix  # black fix
 ```
 
 ## Configuration
@@ -246,7 +264,16 @@ When adding new features:
 3. Implement views in [api/views.py](api/views.py)
 4. Add URL patterns to [api/urls.py](api/urls.py)
 5. Write tests in [api/tests.py](api/tests.py)
-6. Update this README with new endpoints
+6. Run `poetry run poe lint` to check code quality
+7. Update this README with new endpoints
+
+## CI/CD
+
+The project includes a GitHub Actions workflow (`.github/workflows/python-lint.yml`) that automatically runs lint checks on:
+- Push to `main` branch
+- Pull requests targeting `main` branch
+
+The workflow only triggers when backend files are modified.
 
 ## License
 

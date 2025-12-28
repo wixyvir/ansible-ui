@@ -17,15 +17,15 @@ class PlaySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Play
-        fields = ['id', 'name', 'date', 'status', 'tasks']
-        read_only_fields = ['id']
+        fields = ["id", "name", "date", "status", "tasks"]
+        read_only_fields = ["id"]
 
     def to_representation(self, instance):
         """Convert datetime to ISO string format for frontend compatibility."""
         representation = super().to_representation(instance)
         # Ensure date is in ISO format (YYYY-MM-DDTHH:MM:SS)
-        if representation.get('date'):
-            representation['date'] = instance.date.isoformat()
+        if representation.get("date"):
+            representation["date"] = instance.date.isoformat()
         return representation
 
 
@@ -36,19 +36,19 @@ class HostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Host
-        fields = ['id', 'hostname', 'plays']
-        read_only_fields = ['id']
+        fields = ["id", "hostname", "plays"]
+        read_only_fields = ["id"]
 
 
 class HostListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing hosts without plays."""
 
-    play_count = serializers.IntegerField(source='plays.count', read_only=True)
+    play_count = serializers.IntegerField(source="plays.count", read_only=True)
 
     class Meta:
         model = Host
-        fields = ['id', 'hostname', 'play_count']
-        read_only_fields = ['id']
+        fields = ["id", "hostname", "play_count"]
+        read_only_fields = ["id"]
 
 
 class PlayCreateSerializer(serializers.ModelSerializer):
@@ -60,11 +60,11 @@ class PlayCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Play
-        fields = ['name', 'date', 'status', 'tasks_ok', 'tasks_changed', 'tasks_failed']
+        fields = ["name", "date", "status", "tasks_ok", "tasks_changed", "tasks_failed"]
 
     def validate_status(self, value):
         """Ensure status is one of the valid choices."""
-        valid_statuses = ['ok', 'changed', 'failed']
+        valid_statuses = ["ok", "changed", "failed"]
         if value not in valid_statuses:
             raise serializers.ValidationError(
                 f"Status must be one of: {', '.join(valid_statuses)}"
@@ -76,23 +76,23 @@ class LogSerializer(serializers.ModelSerializer):
     """Serializer for Log model with nested hosts."""
 
     hosts = HostSerializer(many=True, read_only=True)
-    host_count = serializers.IntegerField(source='hosts.count', read_only=True)
+    host_count = serializers.IntegerField(source="hosts.count", read_only=True)
 
     class Meta:
         model = Log
-        fields = ['id', 'title', 'uploaded_at', 'hosts', 'host_count']
-        read_only_fields = ['id', 'uploaded_at']
+        fields = ["id", "title", "uploaded_at", "hosts", "host_count"]
+        read_only_fields = ["id", "uploaded_at"]
 
 
 class LogListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing logs without full host data."""
 
-    host_count = serializers.IntegerField(source='hosts.count', read_only=True)
+    host_count = serializers.IntegerField(source="hosts.count", read_only=True)
 
     class Meta:
         model = Log
-        fields = ['id', 'title', 'uploaded_at', 'host_count']
-        read_only_fields = ['id', 'uploaded_at']
+        fields = ["id", "title", "uploaded_at", "host_count"]
+        read_only_fields = ["id", "uploaded_at"]
 
 
 class LogCreateSerializer(serializers.ModelSerializer):
@@ -100,7 +100,7 @@ class LogCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Log
-        fields = ['title', 'raw_content']
+        fields = ["title", "raw_content"]
 
     def validate_title(self, value):
         """Ensure title is not empty."""
