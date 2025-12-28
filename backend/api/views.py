@@ -1,32 +1,24 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 
 from .models import Host, Log
-from .serializers import HostSerializer, LogSerializer, LogListSerializer
+from .serializers import HostSerializer, LogSerializer
 
 
-class LogViewSet(viewsets.ReadOnlyModelViewSet):
+class LogViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
     ViewSet for viewing logs.
 
-    list: Get all logs (lightweight, without full host data)
     retrieve: Get a specific log with all hosts and plays
     hosts: Get all hosts for a specific log
     """
 
     queryset = Log.objects.all()
-
-    def get_serializer_class(self):
-        if self.action == "list":
-            return LogListSerializer
-        return LogSerializer
+    serializer_class = LogSerializer
 
     def get_queryset(self):
-        queryset = Log.objects.all()
-        if self.action == "retrieve":
-            queryset = queryset.prefetch_related("hosts__plays")
-        return queryset
+        return Log.objects.all().prefetch_related("hosts__plays")
 
     @action(detail=True, methods=["get"])
     def hosts(self, request, pk=None):
