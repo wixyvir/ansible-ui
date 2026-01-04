@@ -1,0 +1,102 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Test Log Submission | {{ site_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='api' %}">Api</a>
+    &rsaquo; <a href="{% url 'admin:api_log_changelist' %}">Logs</a>
+    &rsaquo; Test Log Submission
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Test Log Submission</h1>
+<p>Use this form to test submitting Ansible logs to the API endpoint. The log will be parsed and stored in the database.</p>
+
+{% if error %}
+<div class="errornote" style="margin-bottom: 20px;">
+    <h3 style="color: #ba2121; margin: 0 0 10px 0;">{{ error.error }}</h3>
+    <p><strong>Detail:</strong> {{ error.detail }}</p>
+    {% if error.parser_type %}
+    <p><strong>Parser Type:</strong> {{ error.parser_type }}</p>
+    {% endif %}
+    {% if error.raw_content_preview %}
+    <p><strong>Content Preview:</strong></p>
+    <pre style="background: #f8f8f8; padding: 10px; overflow-x: auto; max-height: 200px;">{{ error.raw_content_preview }}</pre>
+    {% endif %}
+    {% if error.traceback %}
+    <details>
+        <summary style="cursor: pointer; color: #666;">Show Traceback</summary>
+        <pre style="background: #f8f8f8; padding: 10px; overflow-x: auto; font-size: 11px;">{{ error.traceback }}</pre>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if result %}
+<div class="success" style="margin-bottom: 20px; padding: 10px; background: #dfd; border: 1px solid #0a0;">
+    <h3 style="color: #0a0; margin: 0 0 10px 0;">Log Created Successfully!</h3>
+    <p><strong>Log ID:</strong> {{ result.id }}</p>
+    <p><strong>Title:</strong> {{ result.title }}</p>
+    <p><strong>Hosts Created:</strong> {{ result.host_count }}</p>
+    <p><strong>Total Plays:</strong> {{ result.total_plays }}</p>
+    <p>
+        <a href="{% url 'admin:api_log_change' result.id %}" class="button" style="padding: 5px 15px;">
+            View Created Log
+        </a>
+    </p>
+</div>
+{% endif %}
+
+<form method="post" id="log-submit-form">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+        <h2>Log Details</h2>
+        <div class="form-row">
+            <div>
+                <label for="id_title" class="required">Title:</label>
+                <input type="text" name="title" id="id_title" required
+                       value="{{ form_data.title|default:'' }}"
+                       style="width: 400px;">
+                <p class="help">A descriptive name for this log (e.g., "Production Deploy 2024-01-15")</p>
+            </div>
+        </div>
+        <div class="form-row">
+            <div>
+                <label for="id_raw_content" class="required">Raw Log Content:</label>
+                <textarea name="raw_content" id="id_raw_content" rows="25" cols="120"
+                          style="font-family: monospace; width: 100%;"
+                          placeholder="Paste your Ansible playbook output here...">{{ form_data.raw_content|default:'' }}</textarea>
+                <p class="help">
+                    Paste the raw Ansible playbook output. Supports both raw stdout format
+                    (starting with "PLAY [...]") and timestamped log format.
+                </p>
+            </div>
+        </div>
+    </fieldset>
+
+    <div class="submit-row">
+        <input type="submit" value="Submit Log" class="default">
+        <a href="{% url 'admin:api_log_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+
+<div style="margin-top: 30px; padding: 15px; background: #f8f8f8; border: 1px solid #ddd;">
+    <h3 style="margin-top: 0;">Example Log Format</h3>
+    <pre style="font-size: 12px; overflow-x: auto;">
+PLAY [Setup Web Server] ********************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [web-01.example.com]
+
+TASK [Install nginx] ***********************************************************
+changed: [web-01.example.com]
+
+PLAY RECAP *********************************************************************
+web-01.example.com         : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+    </pre>
+</div>
+{% endblock %}

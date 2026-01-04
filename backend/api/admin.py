@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.db.models import Q
+from django.shortcuts import render
+from django.urls import path
 from django.utils.html import format_html
-from .models import Log, Host, Play
+
+from .models import Host, Log, Play
+from .services.log_parser import LogParserService, determine_status
 
 
 # Custom List Filters
@@ -163,6 +167,93 @@ class LogAdmin(admin.ModelAdmin):
     date_hierarchy = "uploaded_at"
     inlines = [HostInline]
     ordering = ["-uploaded_at"]
+    change_list_template = "admin/api/log/change_list.html"
+
+    def get_urls(self):
+        """Add custom URL for log submission testing."""
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "submit-test/",
+                self.admin_site.admin_view(self.submit_test_view),
+                name="api_log_submit_test",
+            ),
+        ]
+        return custom_urls + urls
+
+    def submit_test_view(self, request):
+        """View for testing log submission via admin."""
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Test Log Submission",
+            "opts": self.model._meta,
+        }
+
+        if request.method == "POST":
+            title = request.POST.get("title", "").strip()
+            raw_content = request.POST.get("raw_content", "")
+
+            # Keep form data for re-display on error
+            context["form_data"] = {"title": title, "raw_content": raw_content}
+
+            if not title:
+                context["error"] = {
+                    "error": "Validation Error",
+                    "detail": "Title is required",
+                }
+                return render(request, "admin/api/log/submit_test.html", context)
+
+            if not raw_content.strip():
+                context["error"] = {
+                    "error": "Validation Error",
+                    "detail": "Raw log content is required",
+                }
+                return render(request, "admin/api/log/submit_test.html", context)
+
+            # Parse the log
+            parser_service = LogParserService()
+            result = parser_service.parse(raw_content)
+
+            if not result.success:
+                context["error"] = {
+                    "error": result.error or "Log parsing failed",
+                    "detail": result.detail or "Unknown parsing error",
+                    "parser_type": result.parser_type,
+                    "raw_content_preview": raw_content[:500] if raw_content else None,
+                    "traceback": result.traceback_str,
+                }
+                return render(request, "admin/api/log/submit_test.html", context)
+
+            # Create the log and related entities
+            log = Log.objects.create(title=title, raw_content=raw_content)
+
+            for parsed_host in result.hosts:
+                host = Host.objects.create(log=log, hostname=parsed_host.hostname)
+
+                for parsed_play in result.plays:
+                    Play.objects.create(
+                        host=host,
+                        name=parsed_play.name,
+                        date=result.timestamp,
+                        status=determine_status(parsed_host),
+                        tasks_ok=parsed_host.ok,
+                        tasks_changed=parsed_host.changed,
+                        tasks_failed=parsed_host.failed,
+                        line_number=parsed_play.line_number,
+                        order=parsed_play.order,
+                    )
+
+            # Success - show result
+            total_plays = sum(host.plays.count() for host in log.hosts.all())
+            context["result"] = {
+                "id": log.id,
+                "title": log.title,
+                "host_count": log.hosts.count(),
+                "total_plays": total_plays,
+            }
+            context["form_data"] = {"title": "", "raw_content": ""}
+
+        return render(request, "admin/api/log/submit_test.html", context)
 
     def get_queryset(self, request):
         """Optimize queryset with prefetch_related to avoid N+1 queries."""

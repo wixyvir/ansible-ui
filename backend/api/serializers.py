@@ -17,7 +17,7 @@ class PlaySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Play
-        fields = ["id", "name", "date", "status", "tasks"]
+        fields = ["id", "name", "date", "status", "tasks", "line_number", "order"]
         read_only_fields = ["id"]
 
     def to_representation(self, instance):

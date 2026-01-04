@@ -50,7 +50,7 @@ class Play(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     host = models.ForeignKey(Host, on_delete=models.CASCADE, related_name="plays")
     name = models.CharField(max_length=255)
-    date = models.DateTimeField()
+    date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, db_index=True)
 
     # Task summary fields
@@ -58,15 +58,23 @@ class Play(models.Model):
     tasks_changed = models.IntegerField(default=0)
     tasks_failed = models.IntegerField(default=0)
 
+    # Log position fields
+    line_number = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Line number in raw log where play starts"
+    )
+    order = models.PositiveIntegerField(
+        default=0, help_text="Play order position (0-indexed)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-date"]
+        ordering = ["order"]
         verbose_name = "Play"
         verbose_name_plural = "Plays"
         indexes = [
-            models.Index(fields=["host", "-date"]),
+            models.Index(fields=["host", "order"]),
             models.Index(fields=["status", "-date"]),
         ]
 

@@ -31,6 +31,8 @@ The primary goal is to provide DevOps teams and system administrators with an in
 - **Poetry**: Dependency management and packaging
 - **SQLite**: Development database (PostgreSQL for production)
 - **django-cors-headers**: CORS support for frontend communication
+- **ansible-output-parser**: Library for parsing Ansible playbook output
+- **Poe the Poet**: Task runner for linting and code quality commands
 
 ## Architecture
 
@@ -54,7 +56,12 @@ ansible-ui/
 │   │   ├── views.py      # API view implementations
 │   │   ├── urls.py       # API URL routing
 │   │   ├── models.py     # Database models
-│   │   └── serializers.py # DRF serializers
+│   │   ├── serializers.py # DRF serializers
+│   │   ├── admin.py      # Django admin configuration
+│   │   ├── services/     # Business logic services
+│   │   │   └── log_parser.py  # Ansible log parsing service
+│   │   └── templates/    # Django admin templates
+│   │       └── admin/api/log/  # Custom admin templates
 │   ├── manage.py         # Django management script
 │   ├── pyproject.toml    # Poetry dependencies
 │   └── README.md         # Backend documentation
@@ -129,19 +136,24 @@ Represents a single Ansible play execution:
 interface Play {
   id: string;           // Unique identifier
   name: string;         // Play name (e.g., "Setup Web Server")
-  date: string;         // Execution timestamp
+  date: string;         // Execution timestamp (nullable)
   status: PlayStatus;   // Play status (ok/changed/failed)
   tasks: TaskSummary;   // Task execution counts for this play
+  line_number: number;  // Line number in raw log where play starts
+  order: number;        // Play order position (0-indexed)
 }
 ```
 
 **Backend Model** (Django):
 - `host`: ForeignKey to Host
 - `name`: CharField - Play name
-- `date`: DateTimeField - Execution timestamp
+- `date`: DateTimeField - Execution timestamp (nullable for raw stdout logs)
 - `status`: CharField with choices (ok/changed/failed)
 - `tasks_ok`, `tasks_changed`, `tasks_failed`: IntegerFields
+- `line_number`: PositiveIntegerField - Line number in raw log (nullable)
+- `order`: PositiveIntegerField - Play order position for sorting
 - `tasks` property returns TaskSummary dict for API serialization
+- Database indexes on `(host, order)` and `(status, -date)` for query performance
 
 #### TaskSummary
 Aggregated task results for a play:
@@ -292,8 +304,13 @@ poetry run python manage.py runserver
 - `poetry run python manage.py makemigrations` - Create new migrations
 - `poetry run python manage.py createsuperuser` - Create admin user
 - `poetry run pytest` - Run tests (future)
-- `poetry run black .` - Format code (future)
-- `poetry run flake8` - Lint code (future)
+
+**Poe Task Runner Commands** (recommended):
+- `poetry run poe lint` - Run all lint checks (autoflake, flake8, black)
+- `poetry run poe fix` - Auto-fix lint issues (autoflake + black)
+- `poetry run poe lint-check` - Check for unused imports/variables
+- `poetry run poe flake8-check` - Run flake8 style checks
+- `poetry run poe black-check` - Check code formatting
 
 ### Mock Data
 
@@ -316,7 +333,7 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - Dark mode design with nested card hierarchy
 - Static mock data (no backend integration yet)
 
-### v0.2.0 - Backend Foundation (Current)
+### v0.2.0 - Backend Foundation
 - **Django REST Framework Backend**: Python 3.12 with Django 5.2
 - **Poetry Dependency Management**: Modern Python packaging and dependency resolution
 - **API Structure**: RESTful API architecture with `/api/` prefix
@@ -325,6 +342,16 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - **CORS Configuration**: Frontend-backend communication enabled
 - **SQLite Database**: Initialized with Django migrations
 - **Development Ready**: Comprehensive documentation and setup guides
+
+### v0.3.0 - Log Parsing & Admin Interface (Current)
+- **Ansible Log Parser Service**: Auto-detects and parses both raw stdout and timestamped log formats
+- **POST `/api/logs/` Endpoint**: Upload and parse Ansible logs via API
+- **Django Admin Interface**: Full admin panel with custom features
+- **Admin Filters**: Custom filters for failures, play status, task counts
+- **Admin Inlines**: View hosts and plays inline when editing logs
+- **Test Submission Page**: Custom admin view for testing log parsing
+- **Play Ordering**: Line number and order fields for accurate play sequencing
+- **Poe Task Runner**: Integrated linting commands (autoflake, flake8, black)
 
 ### Database Models
 
@@ -339,10 +366,13 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 - One-to-many relationship with Play
 
 **Play Model** - Represents Ansible play executions
-- Fields: `name`, `date`, `status`, `tasks_ok`, `tasks_changed`, `tasks_failed`
+- Fields: `name`, `date`, `status`, `tasks_ok`, `tasks_changed`, `tasks_failed`, `line_number`, `order`
 - ForeignKey to Host
 - Status choices: ok, changed, failed
+- `line_number`: Line in raw log where play starts (for navigation)
+- `order`: Play order position for correct sequencing
 - `tasks` property returns TaskSummary dict
+- Database indexes for efficient querying
 
 ### Available Serializers
 
@@ -357,9 +387,25 @@ The first iteration uses hardcoded mock data in [frontend/src/App.tsx](frontend/
 
 ### Current API Endpoints
 
-The backend uses Django REST Framework with a `LogViewSet` that provides read-only access to logs.
+The backend uses Django REST Framework with a `LogViewSet` that provides create and retrieve access to logs.
 
 #### Logs
+
+**POST** `/api/logs/`
+- Upload and parse a new Ansible log
+- Request body: `{ "title": "string", "raw_content": "string" }`
+- Auto-detects log format (raw stdout or timestamped)
+- Creates Log, Host, and Play entities from parsed data
+- Returns 201 with full log data on success
+- Returns 500 with detailed error on parsing failure
+
+**Example Request:**
+```json
+{
+  "title": "Production Deploy 2024-01-15",
+  "raw_content": "PLAY [Setup Web Server] ***...\nPLAY RECAP ***..."
+}
+```
 
 **GET** `/api/logs/{id}/`
 - Retrieve a specific log with all hosts and plays
@@ -386,7 +432,9 @@ The backend uses Django REST Framework with a `LogViewSet` that provides read-on
             "ok": 10,
             "changed": 3,
             "failed": 0
-          }
+          },
+          "line_number": 1,
+          "order": 0
         }
       ]
     }
@@ -416,46 +464,98 @@ The backend uses Django REST Framework with a `LogViewSet` that provides read-on
           "ok": 8,
           "changed": 5,
           "failed": 0
-        }
+        },
+        "line_number": 1,
+        "order": 0
       }
     ]
   }
 ]
 ```
 
+### Log Parser Service
+
+The `LogParserService` in [backend/api/services/log_parser.py](backend/api/services/log_parser.py) handles parsing Ansible output.
+
+**Supported Formats:**
+- **Raw stdout**: Direct output from `ansible-playbook` command (starts with `PLAY [...]`)
+- **Timestamped logs**: Log files with timestamp prefix (`YYYY-MM-DD HH:MM:SS,mmm | ...`)
+
+**Parsing Process:**
+1. Auto-detect format based on first line
+2. Parse using `ansible-output-parser` library
+3. Extract hosts from PLAY RECAP section
+4. Extract play names with line numbers
+5. Determine status per host (failed > changed > ok)
+
+**Data Classes:**
+- `ParsedHost`: hostname, ok, changed, failed, unreachable, skipped, rescued, ignored
+- `ParsedPlay`: name, order, line_number
+- `ParseResult`: success, hosts, plays, timestamp, error details
+
+### Django Admin Interface
+
+Access the admin at `http://localhost:8000/admin/` after creating a superuser.
+
+**LogAdmin Features:**
+- List view: title, uploaded_at, host count, total plays, failure status badge
+- Filters: by date, has failures
+- Search: by title, hostname
+- Inline: view/edit hosts directly
+- Custom action: "Test Log Submission" page for parsing logs
+
+**HostAdmin Features:**
+- List view: hostname, log title, play count, status summary badges, latest play date
+- Filters: by log, date, play status (failed/changed/ok)
+- Search: by hostname, log title
+- Inline: view/edit plays directly
+
+**PlayAdmin Features:**
+- List view: name, hostname, log title, date, status badge, task summary, total tasks
+- Filters: by status, date, host, log, has failed tasks, task count range
+- Search: by name, hostname, log title
+- Fieldsets: organized into Play Information, Task Summary, Metadata sections
+
+**Custom Admin Filters:**
+- `HasFailuresFilter`: Filter logs by whether they contain failed plays
+- `PlayStatusFilter`: Filter hosts by play status composition
+- `HasFailedTasksFilter`: Filter plays by failed task presence
+- `TaskCountRangeFilter`: Filter plays by total task count (0-5, 6-10, 11-20, 20+)
+
+**Test Submission Page:**
+- URL: `/admin/api/log/submit-test/`
+- Form to paste raw Ansible log content
+- Shows parsing errors with traceback on failure
+- Shows created log summary on success with link to view
+
 ### Current Limitations
 - Frontend still uses mock data (backend integration in progress)
 - Log list endpoint not yet implemented (`GET /api/logs/`)
-- Log creation/upload endpoint not yet implemented (`POST /api/logs/`)
-- No Ansible log parsing yet
-- No file upload functionality
-- No filtering or search capabilities
+- No filtering or search capabilities on API endpoints
 - No authentication or user management
 - No real-time updates
 
 ## Future Iterations
 
-### v0.2.x - Backend API Endpoints (Next)
-- **Remaining API Endpoints**:
-  - `GET /api/logs/` - List all logs (not yet implemented)
-  - `POST /api/logs/` - Upload new log file (not yet implemented)
-  - `GET /api/hosts/` - List all hosts
-  - `GET /api/hosts/{id}/` - Get host details with plays
-  - `GET /api/plays/` - List all plays with filtering
-  - `GET /api/plays/{id}/` - Get play details
-- **Ansible Log Parsing**: Process JSON output from ansible-playbook
-- **Frontend Integration**: Replace mock data with API calls
-- **Log Parser**: Parse Ansible JSON output and populate database
+### v0.4.0 - Frontend Integration (Next)
+- **Frontend API Integration**: Replace mock data with API calls
+- **Log Upload UI**: Form to submit Ansible logs from frontend
+- **Error Handling**: Display parsing errors to users
+- **Loading States**: Skeleton loaders during API calls
 
-### v0.3.0 - Enhanced Features
-- Historical play logs with pagination
-- Search and filter capabilities (by hostname, status, date)
+### v0.5.0 - Enhanced API
+- `GET /api/logs/` - List all logs with pagination
+- `GET /api/hosts/` - List all hosts across logs
+- `GET /api/plays/` - List all plays with filtering
+- Search and filter capabilities on API endpoints
+- Export functionality (JSON, CSV formats)
+
+### v0.6.0 - Enhanced UI Features
 - Detailed task-level information display
 - Expandable server cards with full task details
-- Export functionality (JSON, CSV formats)
 - Improved error handling and user feedback
 
-### v0.4.0+ - Advanced Features
+### v0.7.0+ - Advanced Features
 - User authentication and authorization (JWT or session-based)
 - Multi-user support with role-based access control
 - Real-time updates with WebSocket support
@@ -508,8 +608,16 @@ The backend uses Django REST Framework with a `LogViewSet` that provides read-on
 - [backend/api/urls.py](backend/api/urls.py) - API URL routing
 - [backend/api/models.py](backend/api/models.py) - Database models (Log, Host, Play)
 - [backend/api/serializers.py](backend/api/serializers.py) - DRF serializers for all models
+- [backend/api/admin.py](backend/api/admin.py) - Django admin configuration with custom filters
 - [backend/api/tests.py](backend/api/tests.py) - Test cases (future)
 - [backend/api/migrations/](backend/api/migrations/) - Database migration files
+
+### Backend Services
+- [backend/api/services/log_parser.py](backend/api/services/log_parser.py) - Ansible log parsing service
+
+### Backend Admin Templates
+- [backend/api/templates/admin/api/log/change_list.html](backend/api/templates/admin/api/log/change_list.html) - Custom log list with test submission link
+- [backend/api/templates/admin/api/log/submit_test.html](backend/api/templates/admin/api/log/submit_test.html) - Test log submission form
 
 ## Design Decisions
 
@@ -556,6 +664,20 @@ The backend uses Django REST Framework with a `LogViewSet` that provides read-on
 - Lockfile ensures reproducible builds
 - Better dependency conflict resolution
 
+### Why ansible-output-parser?
+- Purpose-built library for parsing Ansible output
+- Handles both raw stdout and timestamped log formats
+- Extracts PLAY RECAP data with task counts per host
+- Parses play names and structure
+- Maintained library with active development
+
+### Why Poe the Poet?
+- Integrated task runner for pyproject.toml
+- Combines multiple commands into single tasks
+- Supports sequential and parallel execution
+- Clean interface: `poetry run poe lint` vs multiple commands
+- Configured alongside Poetry dependencies
+
 ### ESLint Configuration
 The project uses modern ESLint flat config (eslint.config.js) with:
 - **TypeScript ESLint**: Type-aware linting rules
@@ -588,7 +710,7 @@ The project includes comprehensive code quality tooling:
 - No fallthrough cases in switch statements
 - No unchecked side effect imports
 
-**Running Quality Checks**
+**Running Frontend Quality Checks**
 ```bash
 # Navigate to frontend directory
 cd frontend
@@ -603,21 +725,49 @@ npx tsc -b --noEmit
 npm run lint && npx tsc -b --noEmit
 ```
 
+**Running Backend Quality Checks**
+```bash
+# Navigate to backend directory
+cd backend
+
+# Run all lint checks (autoflake, flake8, black)
+poetry run poe lint
+
+# Auto-fix lint issues
+poetry run poe fix
+
+# Individual checks
+poetry run poe lint-check     # Check unused imports/variables
+poetry run poe flake8-check   # Style checks
+poetry run poe black-check    # Format check
+```
+
 **Current Status**: ✅ All checks passing
-- Zero ESLint errors or warnings
-- Zero TypeScript type errors
+- Zero ESLint errors or warnings (frontend)
+- Zero TypeScript type errors (frontend)
+- Zero flake8/black issues (backend)
 - Production-ready codebase
 
 ## Contributing
 
 When extending this project, follow these guidelines:
 
+### Frontend
 1. **Maintain Type Safety**: Always use TypeScript types from `src/types/`
 2. **Component Reusability**: Create small, focused components
 3. **Consistent Styling**: Use Tailwind utilities, avoid custom CSS
 4. **Dark Mode First**: Design for dark mode, then adapt if light mode is added
 5. **Responsive Design**: Test on mobile, tablet, and desktop viewports
 6. **Accessibility**: Use semantic HTML and ARIA labels where appropriate
+
+### Backend
+1. **Run Linting**: Always run `poetry run poe lint` before committing
+2. **Auto-fix Issues**: Use `poetry run poe fix` to auto-format code
+3. **Service Layer**: Put business logic in `api/services/`, keep views thin
+4. **Type Hints**: Use Python type hints for function signatures
+5. **Django Admin**: Leverage admin interface for data inspection and testing
+6. **Migrations**: Create migrations for any model changes
+7. **Query Optimization**: Use `select_related` and `prefetch_related` for nested queries
 
 ## Troubleshooting
 
