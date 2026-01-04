@@ -4,13 +4,14 @@ Django REST Framework backend for the Ansible UI project. This backend processes
 
 ## Overview
 
-The backend is part of the Ansible UI project (v0.2.0) and serves as the data layer for displaying Ansible play execution results. It uses Django 5.2+ with Django REST Framework for API endpoints.
+The backend is part of the Ansible UI project (v0.3.0) and serves as the data layer for displaying Ansible play execution results. It uses Django 5.2+ with Django REST Framework for API endpoints.
 
 ## Technology Stack
 
 - **Python**: 3.12+
 - **Django**: 5.2+
 - **Django REST Framework**: 3.14+
+- **ansible-output-parser**: Library for parsing Ansible playbook output
 - **Database**: SQLite (development), PostgreSQL (production-ready)
 - **CORS**: django-cors-headers for frontend communication
 - **Dependency Management**: Poetry
@@ -29,6 +30,11 @@ backend/
 │   ├── urls.py         # API URL routes
 │   ├── models.py       # Database models
 │   ├── serializers.py  # DRF serializers
+│   ├── admin.py        # Django admin configuration
+│   ├── services/       # Business logic services
+│   │   └── log_parser.py  # Ansible log parsing service
+│   ├── templates/      # Django admin templates
+│   │   └── admin/api/log/  # Custom admin templates
 │   └── tests.py        # Test cases
 ├── manage.py           # Django management script
 ├── pyproject.toml      # Poetry dependencies
@@ -92,6 +98,64 @@ For more installation options, visit: https://python-poetry.org/docs/#installati
 The backend uses Django REST Framework with a router-based URL configuration. All endpoints are prefixed with `/api/`.
 
 ### Logs
+
+#### Upload and Parse Log
+
+**URL**: `/api/logs/`
+**Method**: `POST`
+**Description**: Upload and parse an Ansible log file
+
+**Request Body**:
+```json
+{
+  "title": "Production Deploy 2024-01-15",
+  "raw_content": "PLAY [Setup Web Server] ***...\nPLAY RECAP ***..."
+}
+```
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:8000/api/logs/ \
+  -H "Content-Type: application/json" \
+  -d '{"title": "My Log", "raw_content": "PLAY [Test] ***\n\nTASK [Gathering Facts] ***\nok: [server1]\n\nPLAY RECAP ***\nserver1 : ok=1 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0"}'
+```
+
+**Success Response** (201 Created):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "My Log",
+  "uploaded_at": "2024-01-15T10:30:00Z",
+  "hosts": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "hostname": "server1",
+      "plays": [
+        {
+          "id": "770e8400-e29b-41d4-a716-446655440002",
+          "name": "Test",
+          "date": null,
+          "status": "ok",
+          "tasks": {"ok": 1, "changed": 0, "failed": 0},
+          "line_number": 1,
+          "order": 0
+        }
+      ]
+    }
+  ],
+  "host_count": 1
+}
+```
+
+**Error Response** (500 Internal Server Error):
+```json
+{
+  "error": "No hosts found in log",
+  "detail": "The parser could not find any PLAY RECAP section",
+  "parser_type": "play",
+  "raw_content_preview": "..."
+}
+```
 
 #### Get Log Details
 
@@ -207,9 +271,11 @@ curl http://localhost:8000/api/logs/550e8400-e29b-41d4-a716-446655440000/hosts/
 |-------|------|-------------|
 | id | UUID | Unique identifier |
 | name | string | Play name |
-| date | ISO datetime | Execution timestamp |
+| date | ISO datetime or null | Execution timestamp (null for raw stdout logs) |
 | status | string | ok, changed, or failed |
 | tasks | object | Task summary counts |
+| line_number | integer or null | Line number in raw log where play starts |
+| order | integer | Play order position (0-indexed) |
 
 #### TaskSummary
 | Field | Type | Description |
@@ -247,6 +313,16 @@ poetry run python manage.py createsuperuser
 ```
 
 Access the admin panel at `http://localhost:8000/admin/`
+
+### Django Admin Features
+
+The admin interface includes enhanced features for managing Ansible logs:
+
+- **Log Admin**: View logs with host count, play count, and failure status badges
+- **Host Admin**: View hosts with play status summary and latest play date
+- **Play Admin**: View plays with colored status badges and task summaries
+- **Test Submission**: Custom page at `/admin/api/log/submit-test/` for testing log parsing
+- **Custom Filters**: Filter by failures, play status, task counts
 
 ### Running Tests (Future)
 
@@ -317,16 +393,13 @@ The backend serves the React frontend located in the `../frontend/` directory. T
 ### Planned Features
 
 - **Remaining API Endpoints**:
-  - `GET /api/logs/` - List all logs
-  - `POST /api/logs/` - Upload new log file
+  - `GET /api/logs/` - List all logs with pagination
   - `GET /api/hosts/` - List all hosts
   - `GET /api/hosts/{id}/` - Get host details with plays
   - `GET /api/plays/` - List all plays
   - `GET /api/plays/{id}/` - Get play details
-- **Ansible Log Parsing**: Process and store Ansible execution results
 - **Authentication**: User authentication and authorization
 - **WebSocket Support**: Real-time updates for live play monitoring
-- **File Upload**: Upload and parse Ansible log files
 - **Filtering & Search**: Query plays by status, date, hostname, etc.
 
 ## Troubleshooting
