@@ -10,6 +10,7 @@ python = "^3.12"
 django = "^5.0"
 djangorestframework = "^3.14"
 django-cors-headers = "^4.3"
+ansible-output-parser = "^0.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4"
