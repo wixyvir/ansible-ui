@@ -9,7 +9,7 @@ export interface TaskSummary {
 export interface Play {
   id: string;
   name: string;
-  date: string;
+  date: string | null;
   status: PlayStatus;
   tasks: TaskSummary;
 }

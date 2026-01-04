@@ -41,10 +41,12 @@ export function PlayCard({ play }: PlayCardProps) {
           {play.name}
         </h4>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-slate-400 text-xs">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>{formatDate(play.date)}</span>
-          </div>
+          {play.date && (
+            <div className="flex items-center gap-1 text-slate-400 text-xs">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{formatDate(play.date)}</span>
+            </div>
+          )}
           <button
             onClick={handleToggle}
             className="text-slate-400 hover:text-slate-200 transition-colors"
