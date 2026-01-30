@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy, Check } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { type PlayStatus, type Task } from '../types/ansible';
@@ -23,6 +23,13 @@ export function CollapsibleTaskSection({
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
+
+  const handleCopy = async (taskId: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedTaskId(taskId);
+    setTimeout(() => setCopiedTaskId(null), 2000);
+  };
 
   const handleToggle = async () => {
     if (count === 0) return;
@@ -84,7 +91,18 @@ export function CollapsibleTaskSection({
                     <div className="flex-1 min-w-0">
                       <span>{task.name}</span>
                       {task.failure_message && (
-                        <div className="mt-1.5 rounded border border-slate-600 overflow-hidden max-h-48 overflow-y-auto">
+                        <div className="mt-1.5 rounded border border-slate-600 overflow-hidden max-h-48 overflow-y-auto relative group">
+                          <button
+                            onClick={() => handleCopy(task.id, task.failure_message!)}
+                            className="absolute top-1 right-1 p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            title="Copy to clipboard"
+                          >
+                            {copiedTaskId === task.id ? (
+                              <Check className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                           <SyntaxHighlighter
                             language="json"
                             style={oneDark}

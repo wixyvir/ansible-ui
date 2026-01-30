@@ -22,6 +22,7 @@ The primary goal is to provide DevOps teams and system administrators with an in
 - **Vite 6**: Lightning-fast build tool and dev server
 - **Tailwind CSS 3.4**: Utility-first CSS framework
 - **Lucide React 0.460**: Clean, consistent icon library
+- **react-syntax-highlighter**: Code syntax highlighting for error messages
 - **ESLint**: Code linting and quality enforcement
 
 ### Backend
@@ -228,6 +229,8 @@ type TaskStatus = 'ok' | 'changed' | 'failed' | 'fatal' | 'skipping' | 'unreacha
 - Caches fetched tasks (no refetch on collapse/expand)
 - Shows loading spinner while fetching
 - Displays task names with failure messages for failed tasks
+- Failure messages in code blocks with JSON syntax highlighting (react-syntax-highlighter with oneDark theme)
+- Copy to clipboard button appears on hover for failure messages
 - Sections with count 0 are disabled (grayed out, non-clickable)
 - Multiple sections can be expanded simultaneously (independent mode)
 
@@ -730,7 +733,7 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - [frontend/src/types/ansible.ts](frontend/src/types/ansible.ts) - TypeScript type definitions (Host, Play, Task, TaskSummary)
 - [frontend/src/services/api.ts](frontend/src/services/api.ts) - Backend API client (fetchLog, fetchTasks)
 - [frontend/src/pages/LogPage.tsx](frontend/src/pages/LogPage.tsx) - Log detail page with hosts grid
-- [frontend/src/components/CollapsibleTaskSection.tsx](frontend/src/components/CollapsibleTaskSection.tsx) - Expandable task list with lazy loading
+- [frontend/src/components/CollapsibleTaskSection.tsx](frontend/src/components/CollapsibleTaskSection.tsx) - Expandable task list with lazy loading and JSON syntax highlighting
 - [frontend/src/components/PlayCard.tsx](frontend/src/components/PlayCard.tsx) - Individual play card with collapsible task sections
 - [frontend/src/components/PlayHeader.tsx](frontend/src/components/PlayHeader.tsx) - (Legacy) Play title and date component
 - [frontend/src/components/ServerCard.tsx](frontend/src/components/ServerCard.tsx) - Host card displaying multiple plays
