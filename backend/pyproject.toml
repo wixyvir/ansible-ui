@@ -3,7 +3,6 @@ name = "ansible-ui-backend"
 version = "0.2.0"
 description = "Django REST Framework backend for Ansible UI - processes Ansible logs and provides REST API"
 authors = ["Ansible UI Team"]
-package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -11,6 +10,7 @@ django = "^5.0"
 djangorestframework = "^3.14"
 django-cors-headers = "^4.3"
 ansible-output-parser = "^0.1.0"
+python-decouple = "^3.8"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4"

@@ -1,0 +1,42 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/db.sqlite3
+backend/*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+docker-compose.yml
+.dockerignore
+Dockerfile
+
+# Environment
+.env
+.env.*
+!.env.production
+
+# Misc
+*.log
+.DS_Store
+*.md
+!backend/README.md
