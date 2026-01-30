@@ -1,5 +1,16 @@
 export type PlayStatus = 'ok' | 'changed' | 'failed';
 
+export type TaskStatus = 'ok' | 'changed' | 'failed' | 'fatal' | 'skipping' | 'unreachable' | 'ignored' | 'rescued';
+
+export interface Task {
+  id: string;
+  name: string;
+  order: number;
+  line_number: number | null;
+  status: TaskStatus;
+  failure_message: string | null;
+}
+
 export interface TaskSummary {
   ok: number;
   changed: number;

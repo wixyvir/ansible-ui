@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { type Play } from '../types/ansible';
-import { StatusBadge } from './StatusBadge';
+import { CollapsibleTaskSection } from './CollapsibleTaskSection';
 
 interface PlayCardProps {
   play: Play;
@@ -63,9 +63,9 @@ export function PlayCard({ play }: PlayCardProps) {
 
       {isExpanded && (
         <div className="space-y-1.5">
-          <StatusBadge status="ok" count={play.tasks.ok} label="OK" />
-          <StatusBadge status="changed" count={play.tasks.changed} label="Changed" />
-          <StatusBadge status="failed" count={play.tasks.failed} label="Failed" />
+          <CollapsibleTaskSection playId={play.id} status="ok" count={play.tasks.ok} label="OK" />
+          <CollapsibleTaskSection playId={play.id} status="changed" count={play.tasks.changed} label="Changed" />
+          <CollapsibleTaskSection playId={play.id} status="failed" count={play.tasks.failed} label="Failed" />
         </div>
       )}
     </div>
