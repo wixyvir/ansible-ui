@@ -61,23 +61,34 @@ Backend runs at: `http://localhost:8000`
 
 ```
 ansible-ui/
-├── frontend/          # React + TypeScript frontend
+├── .github/workflows/     # CI/CD pipelines
+│   ├── docker-build.yml   # Docker build & push to GHCR
+│   └── python-lint.yml    # Python linting
+│
+├── frontend/              # React + TypeScript frontend
 │   ├── src/
 │   │   ├── components/    # React components
 │   │   ├── types/         # TypeScript definitions
 │   │   └── App.tsx        # Main app component
 │   └── package.json
 │
-├── backend/           # Django REST API backend
-│   ├── ansible_ui/    # Django project config
-│   ├── api/          # REST API app
+├── backend/               # Django REST API backend
+│   ├── ansible_ui/        # Django project config
+│   ├── api/               # REST API app
 │   │   ├── models.py      # Database models
 │   │   ├── serializers.py # DRF serializers
-│   │   └── views.py       # API views
+│   │   ├── views.py       # API views
+│   │   └── services/      # Business logic (log parser)
 │   └── pyproject.toml
 │
-├── CLAUDE.md         # Detailed project documentation
-└── README.md         # This file
+├── docker/                # Docker configuration
+│   ├── entrypoint.api.sh  # API startup script
+│   └── nginx.conf         # nginx config
+│
+├── Dockerfile             # Multi-stage build
+├── docker-compose.yml     # Service orchestration
+├── CLAUDE.md              # Detailed documentation
+└── README.md              # This file
 ```
 
 ## Data Model
@@ -88,7 +99,8 @@ The application uses a hierarchical structure:
 Log (uploaded Ansible log file)
  └── Host (servers in the log)
       └── Play (play executions)
-           └── TaskSummary (ok/changed/failed counts)
+           ├── TaskSummary (ok/changed/failed counts)
+           └── Task (individual task executions)
 ```
 
 ### Key Models
@@ -105,27 +117,31 @@ Log (uploaded Ansible log file)
 - Name, date, status (ok/changed/failed)
 - Task counts (ok, changed, failed)
 
+**Task**: Represents an individual task execution
+- Name, order, status, failure message
+- Supports all Ansible statuses (ok, changed, failed, fatal, skipping, etc.)
+
 ## Current Status
 
-**Version 0.2.0** - Backend Foundation Complete
+**Version 0.4.0** - Docker & CI/CD Complete
 
 ✅ Implemented:
 - Complete frontend UI with responsive design
 - Django backend with REST Framework
-- Database models (Log, Host, Play)
-- DRF serializers with frontend compatibility
-- Database migrations
-
-🚧 In Progress:
-- API endpoints (views/viewsets)
-- Ansible log parsing
-- Frontend-backend integration
+- Database models (Log, Host, Play, Task)
+- Ansible log parsing (raw stdout and timestamped formats)
+- Task-level details with failure messages
+- Django admin interface with custom filters
+- Docker multi-stage builds (api, web containers)
+- Docker Compose orchestration with PostgreSQL
+- GitHub Actions CI/CD with GHCR
+- Environment variable configuration (python-decouple)
 
 📋 Planned:
-- File upload functionality
-- Historical log viewing
+- Frontend log upload UI
+- Log list page with pagination
 - Search and filtering
-- Authentication
+- User authentication
 - Real-time updates
 
 ## Documentation
@@ -166,6 +182,41 @@ cd backend && poetry run python manage.py runserver
 - `poetry run python manage.py makemigrations` - Create migrations
 - `poetry run python manage.py createsuperuser` - Create admin user
 
+## Deployment
+
+### Docker Compose (Recommended)
+
+```bash
+# Build and start all services
+docker-compose build
+cp .env.production .env  # Edit with your values
+docker-compose up -d
+
+# Create admin user (migrations run automatically on startup)
+docker-compose exec api django-admin createsuperuser
+```
+
+Access at: `http://localhost:8000`
+
+### Using Pre-built Images from GHCR
+
+Docker images are automatically built and pushed to GitHub Container Registry on every push.
+
+```bash
+# Login to GHCR
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# Pull and run latest images
+docker-compose pull
+docker-compose up -d
+```
+
+**Available images:**
+- `ghcr.io/wixyvir/ansible-ui/api:latest`
+- `ghcr.io/wixyvir/ansible-ui/web:latest`
+
+**Branch tags:** Use `DOCKER_TAG=branch-name` to pull specific branch builds.
+
 ## Database
 
 The application uses SQLite for development. To reset the database:
@@ -186,25 +237,22 @@ poetry run python manage.py migrate
 
 ## Future Roadmap
 
-### v0.2.x - API Endpoints
-- Implement DRF views/viewsets
-- Parse Ansible JSON output
-- Create REST endpoints for all models
-- Frontend integration
+### v0.5.0 - Frontend Enhancements
+- Log upload UI in frontend
+- Log list page with navigation
+- Loading states and error handling
+- Skeleton loaders
 
-### v0.3.0 - Enhanced Features
-- Log upload functionality
-- Historical log viewing with pagination
-- Advanced filtering and search
-- Export capabilities (JSON, CSV)
+### v0.6.0 - Enhanced API
+- List all logs with pagination
+- Search and filter capabilities
+- Export functionality (JSON, CSV)
 
-### v0.4.0+ - Advanced Features
+### v0.7.0+ - Advanced Features
 - User authentication and authorization
 - Real-time updates via WebSockets
 - Email/Slack notifications
 - Analytics dashboard
-- Docker containerization
-- PostgreSQL migration for production
 
 ## License
 

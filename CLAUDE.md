@@ -26,14 +26,25 @@ The primary goal is to provide DevOps teams and system administrators with an in
 - **ESLint**: Code linting and quality enforcement
 
 ### Backend
-- **Python 3.12+**: Modern Python with performance improvements
-- **Django 5.2**: High-level web framework
-- **Django REST Framework 3.16**: Powerful toolkit for building Web APIs
+- **Python 3.11+**: Modern Python with performance improvements
+- **Django 5.0**: High-level web framework
+- **Django REST Framework 3.14**: Powerful toolkit for building Web APIs
 - **Poetry**: Dependency management and packaging
+- **python-decouple**: Environment variable configuration management
+- **psycopg2**: PostgreSQL database adapter
 - **SQLite**: Development database (PostgreSQL for production)
 - **django-cors-headers**: CORS support for frontend communication
 - **ansible-output-parser**: Library for parsing Ansible playbook output
 - **Poe the Poet**: Task runner for linting and code quality commands
+
+### Production Deployment
+- **Docker**: Multi-stage containerization with Docker Compose
+- **GitHub Actions**: CI/CD pipeline for automated Docker builds
+- **GitHub Container Registry (GHCR)**: Docker image hosting
+- **gunicorn**: WSGI HTTP server for Django
+- **nginx**: Reverse proxy and static file server
+- **PostgreSQL 15**: Production database
+- **Rocky Linux 9**: Base container image (Python 3.11)
 
 ## Architecture
 
@@ -51,13 +62,14 @@ ansible-ui/
 │
 ├── backend/               # Django REST API backend
 │   ├── ansible_ui/       # Django project configuration
-│   │   ├── settings.py   # Django settings (CORS, DRF)
+│   │   ├── settings.py   # Django settings (CORS, DRF, decouple)
 │   │   └── urls.py       # Root URL routing
 │   ├── api/              # REST API Django app
 │   │   ├── views.py      # API view implementations
 │   │   ├── urls.py       # API URL routing
 │   │   ├── models.py     # Database models
 │   │   ├── serializers.py # DRF serializers
+│   │   ├── fields.py     # Custom Django fields (UUIDAutoField)
 │   │   ├── admin.py      # Django admin configuration
 │   │   ├── services/     # Business logic services
 │   │   │   └── log_parser.py  # Ansible log parsing service
@@ -65,8 +77,22 @@ ansible-ui/
 │   │       └── admin/api/log/  # Custom admin templates
 │   ├── manage.py         # Django management script
 │   ├── pyproject.toml    # Poetry dependencies
+│   ├── .env.example      # Environment variables template
 │   └── README.md         # Backend documentation
 │
+├── docker/                # Docker configuration files
+│   ├── entrypoint.api.sh # API container startup script
+│   └── nginx.conf        # nginx reverse proxy configuration
+│
+├── .github/               # GitHub configuration
+│   └── workflows/
+│       ├── docker-build.yml  # CI/CD: Docker build & push to GHCR
+│       └── python-lint.yml   # CI: Python linting checks
+│
+├── Dockerfile            # Multi-stage Docker build
+├── docker-compose.yml    # Docker Compose orchestration
+├── .dockerignore         # Docker build context exclusions
+├── .env.production       # Production environment template
 ├── CLAUDE.md             # This file
 └── .gitignore            # Git ignore patterns
 ```
@@ -319,6 +345,159 @@ type TaskStatus = 'ok' | 'changed' | 'failed' | 'fatal' | 'skipping' | 'unreacha
    ```
    Server starts at `http://localhost:8000`
 
+### Environment Configuration
+
+The backend uses `python-decouple` for environment variable management. Settings can be configured via environment variables or a `.env` file.
+
+**Available Environment Variables:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DJANGO_SECRET` | Django secret key | Insecure dev key |
+| `DJANGO_PROD` | Production mode (enables PostgreSQL, disables DEBUG) | `False` |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hosts | Empty |
+| `DJANGO_TZ` | Timezone | `UTC` |
+| `DJANGO_STATIC_ROOT` | Static files directory | `None` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins | `http://localhost:5173` |
+| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted origins for CSRF (full URLs) | http/https + ALLOWED_HOSTS |
+| `DB_NAME` | PostgreSQL database name | Required if `DJANGO_PROD=True` |
+| `DB_USERNAME` | PostgreSQL username | Required if `DJANGO_PROD=True` |
+| `DB_PASSWORD` | PostgreSQL password | Required if `DJANGO_PROD=True` |
+| `DB_HOSTNAME` | PostgreSQL host | Required if `DJANGO_PROD=True` |
+| `DB_PORT` | PostgreSQL port | Required if `DJANGO_PROD=True` |
+
+**Development** (no `.env` file needed - defaults work):
+```bash
+poetry run python manage.py runserver
+```
+
+**Production** (create `.env` file in backend directory):
+```bash
+DJANGO_PROD=True
+DJANGO_SECRET=your-secure-secret-key
+DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
+DJANGO_STATIC_ROOT=/var/www/static
+CSRF_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+DB_NAME=ansible_ui
+DB_USERNAME=postgres
+DB_PASSWORD=your-secure-password
+DB_HOSTNAME=localhost
+DB_PORT=5432
+```
+
+See [backend/.env.example](backend/.env.example) for a complete template.
+
+### Docker Deployment
+
+The project includes production-ready Docker configuration with multi-stage builds.
+
+**Architecture:**
+- **frontend-builder**: Builds React app with Node.js 20
+- **backend-builder**: Builds Python package with Poetry
+- **api**: Django application with gunicorn (Rocky Linux 9)
+- **web**: nginx reverse proxy serving frontend and proxying API (Alpine Linux)
+- **db**: PostgreSQL 13 database
+
+**Quick Start:**
+
+1. **Build images:**
+   ```bash
+   docker-compose build
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp .env.production .env
+   # Edit .env with your secure values
+   ```
+
+3. **Start services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Create superuser** (migrations run automatically on startup):
+   ```bash
+   docker-compose exec api django-admin createsuperuser
+   ```
+
+5. **Access the application:**
+   - Frontend: http://localhost:8000/
+   - Admin: http://localhost:8000/admin/
+   - API: http://localhost:8000/api/
+
+**docker-compose.yml services:**
+- `api`: Django backend (internal port 8000)
+- `db`: PostgreSQL 15 with persistent volume
+- `web`: nginx (external port 8000)
+
+**nginx routing:**
+- `/` → React frontend (SPA with fallback routing)
+- `/api/` → Django API backend
+- `/admin/` → Django admin interface
+- `/static/` → Django static files
+
+**Environment variables** (same as development, defined in `.env`):
+- `DJANGO_PROD=True` (enables PostgreSQL, disables DEBUG)
+- `DJANGO_SECRET` (secure random secret key)
+- `DJANGO_ALLOWED_HOSTS` (comma-separated domains)
+- `DB_*` variables for PostgreSQL connection
+
+**Production notes:**
+- Change all default passwords and secrets
+- Use proper domain in `DJANGO_ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS`
+- Consider HTTPS termination (nginx + Let's Encrypt)
+- Set up volume backups for PostgreSQL data
+- Add health checks to docker-compose
+
+### CI/CD with GitHub Actions
+
+The project includes automated Docker image builds via GitHub Actions.
+
+**Workflow File:** [.github/workflows/docker-build.yml](.github/workflows/docker-build.yml)
+
+**Trigger Events:**
+- Push to any branch → Build and push images
+- Pull request to main → Build only (no push)
+
+**Images Published:**
+- `ghcr.io/wixyvir/ansible-ui/api:<tag>`
+- `ghcr.io/wixyvir/ansible-ui/web:<tag>`
+
+**Tagging Strategy:**
+| Event | Tags |
+|-------|------|
+| Push to `main` | `latest`, `main`, `sha-<commit>` |
+| Push to `feature/foo` | `feature-foo`, `sha-<commit>` |
+| Push to `dev` | `dev`, `sha-<commit>` |
+| Pull request | Build only (no push) |
+
+**Using Pre-built Images:**
+
+1. **Authenticate to GHCR:**
+   ```bash
+   echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+   ```
+
+2. **Pull latest images:**
+   ```bash
+   docker-compose pull
+   ```
+
+3. **Or use a specific branch tag:**
+   ```bash
+   DOCKER_TAG=feature-foo docker-compose pull
+   ```
+
+4. **Start with pulled images:**
+   ```bash
+   docker-compose up -d
+   ```
+
+**Local Development:**
+- `docker-compose build` still works for local builds
+- Images are tagged with GHCR names for consistency
+
 ### Development Workflow
 
 **Running Both Servers**
@@ -403,7 +582,7 @@ The frontend fetches data from the backend API:
 - **Play Ordering**: Line number and order fields for accurate play sequencing
 - **Poe Task Runner**: Integrated linting commands (autoflake, flake8, black)
 
-### v0.3.1 - Task-Level Parsing (Current)
+### v0.3.1 - Task-Level Parsing
 - **Task Model**: New model to store individual task executions per play per host
 - **Task Extraction**: Parser extracts task names, status, and failure messages from logs
 - **Per-Host Task Status**: Each task stores its status (ok/changed/failed/fatal/skipping/etc.) for the specific host
@@ -415,6 +594,25 @@ The frontend fetches data from the backend API:
 - **Frontend Task Display**: Collapsible task sections in PlayCard with lazy-loaded task lists
 - **CollapsibleTaskSection Component**: Expandable status badges that fetch and display tasks
 - **fetchTasks API**: Frontend API function for fetching tasks by play ID and status
+
+### v0.4.0 - Docker Containerization & Environment Configuration (Current)
+- **python-decouple Integration**: Environment variable configuration for Django settings
+- **Environment Variables**: `DJANGO_SECRET`, `DJANGO_PROD`, `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `DB_*`, etc.
+- **Multi-stage Dockerfile**: Separate build stages for frontend, backend, API, and web
+- **Docker Compose**: Three-service architecture (api, db, web) on port 8000
+- **PostgreSQL 15 Production Database**: Configured with persistent volumes
+- **gunicorn**: Production WSGI server for Django
+- **nginx Reverse Proxy**: Serves React frontend and proxies API/admin requests with X-Forwarded-Proto header
+- **Rocky Linux 9**: Base image for backend containers (Python 3.11)
+- **UUIDAutoField**: Custom auto-field for consistent UUID primary keys across all models
+- **Squashed Migrations**: Single initial migration for cleaner database setup
+- **CSRF Protection**: Configurable CSRF_TRUSTED_ORIGINS with http/https defaults, SECURE_PROXY_SSL_HEADER for reverse proxy
+- **Production Ready**: Full deployment configuration with security best practices
+- **.env.production Template**: Example production environment configuration
+- **GitHub Actions CI/CD**: Automated Docker image builds on push to any branch
+- **GitHub Container Registry (GHCR)**: Docker images published to `ghcr.io/wixyvir/ansible-ui/api` and `ghcr.io/wixyvir/ansible-ui/web`
+- **Branch-based Tagging**: Images tagged with branch name (sanitized), `latest` for main, and SHA prefix for traceability
+- **Build Caching**: GitHub Actions cache for faster Docker builds
 
 ### Database Models
 
@@ -679,25 +877,25 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 
 ## Future Iterations
 
-### v0.4.0 - Frontend Enhancements (Next)
+### v0.5.0 - Frontend Enhancements (Next)
 - **Log Upload UI**: Form to submit Ansible logs from frontend
 - **Log List Page**: Display all logs with navigation
 - **Error Handling**: Display parsing errors to users
 - **Loading States**: Skeleton loaders during API calls
 
-### v0.5.0 - Enhanced API
+### v0.6.0 - Enhanced API
 - `GET /api/logs/` - List all logs with pagination
 - `GET /api/hosts/` - List all hosts across logs
 - `GET /api/plays/` - List all plays with filtering
 - Search and filter capabilities on API endpoints
 - Export functionality (JSON, CSV formats)
 
-### v0.6.0 - Enhanced UI Features
+### v0.7.0 - Enhanced UI Features
 - Task search and filtering in UI
 - Jump to line number in raw log view
 - Improved error handling and user feedback
 
-### v0.7.0+ - Advanced Features
+### v0.8.0+ - Advanced Features
 - User authentication and authorization (JWT or session-based)
 - Multi-user support with role-based access control
 - Real-time updates with WebSocket support
@@ -706,14 +904,23 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - Play history and comparison views
 - Dark/Light mode toggle
 - Customizable views and user preferences
-- PostgreSQL migration for production
-- Docker containerization
+- HTTPS termination with Let's Encrypt
+- Health checks and monitoring
+- Log aggregation and analytics
 
 ## File Organization
 
 ### Root Files
 - [CLAUDE.md](CLAUDE.md) - This project documentation file
 - [.gitignore](.gitignore) - Git ignore patterns (frontend, backend, Python)
+- [Dockerfile](Dockerfile) - Multi-stage Docker build configuration
+- [docker-compose.yml](docker-compose.yml) - Docker Compose orchestration
+- [.dockerignore](.dockerignore) - Docker build context exclusions
+- [.env.production](.env.production) - Production environment variables template
+
+### GitHub Actions Workflows
+- [.github/workflows/docker-build.yml](.github/workflows/docker-build.yml) - Docker build & push to GHCR on branch push
+- [.github/workflows/python-lint.yml](.github/workflows/python-lint.yml) - Python linting (autoflake, flake8, black) on backend changes
 
 ### Frontend Configuration Files
 - [frontend/package.json](frontend/package.json) - NPM dependencies and scripts
@@ -743,9 +950,10 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - [backend/pyproject.toml](backend/pyproject.toml) - Poetry dependencies and project metadata
 - [backend/manage.py](backend/manage.py) - Django management command-line utility
 - [backend/README.md](backend/README.md) - Backend-specific documentation
+- [backend/.env.example](backend/.env.example) - Environment variables template
 
 ### Backend Source Files
-- [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py) - Django settings (apps, middleware, CORS, DRF)
+- [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py) - Django settings (apps, middleware, CORS, DRF, CSRF)
 - [backend/ansible_ui/urls.py](backend/ansible_ui/urls.py) - Root URL configuration
 - [backend/ansible_ui/wsgi.py](backend/ansible_ui/wsgi.py) - WSGI application
 - [backend/ansible_ui/asgi.py](backend/ansible_ui/asgi.py) - ASGI application
@@ -753,9 +961,10 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - [backend/api/urls.py](backend/api/urls.py) - API URL routing
 - [backend/api/models.py](backend/api/models.py) - Database models (Log, Host, Play, Task)
 - [backend/api/serializers.py](backend/api/serializers.py) - DRF serializers for all models
+- [backend/api/fields.py](backend/api/fields.py) - Custom Django fields (UUIDAutoField for UUID primary keys)
 - [backend/api/admin.py](backend/api/admin.py) - Django admin configuration with custom filters
 - [backend/api/tests.py](backend/api/tests.py) - Test cases (future)
-- [backend/api/migrations/](backend/api/migrations/) - Database migration files
+- [backend/api/migrations/](backend/api/migrations/) - Database migration files (squashed into single initial)
 
 ### Backend Services
 - [backend/api/services/log_parser.py](backend/api/services/log_parser.py) - Ansible log parsing service
@@ -763,6 +972,10 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 ### Backend Admin Templates
 - [backend/api/templates/admin/api/log/change_list.html](backend/api/templates/admin/api/log/change_list.html) - Custom log list with test submission link
 - [backend/api/templates/admin/api/log/submit_test.html](backend/api/templates/admin/api/log/submit_test.html) - Test log submission form
+
+### Docker Configuration Files
+- [docker/entrypoint.api.sh](docker/entrypoint.api.sh) - API container startup script (waits for DB, runs migrations, starts gunicorn)
+- [docker/nginx.conf](docker/nginx.conf) - nginx configuration for reverse proxy and static file serving
 
 ## Design Decisions
 
@@ -822,6 +1035,37 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - Supports sequential and parallel execution
 - Clean interface: `poetry run poe lint` vs multiple commands
 - Configured alongside Poetry dependencies
+
+### Why python-decouple?
+- Clean separation of configuration from code
+- Supports both environment variables and `.env` files
+- Type casting with `cast` parameter (bool, int, Csv)
+- Secure defaults for development
+- Production-ready configuration pattern
+- No code changes needed between environments
+
+### Why UUIDAutoField?
+- Consistent UUID primary keys across all models
+- More secure than sequential integers (no enumeration)
+- Works seamlessly with Django admin and DRF
+- Custom field combines UUIDField with AutoField behavior
+- Automatically generates UUIDs on model creation
+
+### Why Docker Multi-stage Builds?
+- **Optimized image sizes**: Each stage only contains what's needed
+- **Build caching**: Faster rebuilds by caching layers
+- **Security**: Production images don't include build tools
+- **Separation of concerns**: Frontend, backend, and runtime are isolated
+- **Reference consistency**: Follows `platform_api` pattern with Rocky Linux 9
+- **Production ready**: gunicorn + nginx + PostgreSQL stack
+
+### Why GitHub Actions + GHCR?
+- **Native integration**: No external CI/CD service needed
+- **Free for public repos**: Unlimited Actions minutes and GHCR storage
+- **Automatic authentication**: `GITHUB_TOKEN` works out of the box
+- **Branch-based tagging**: Easy deployment of feature branches for testing
+- **Build caching**: GitHub Actions cache reduces build times significantly
+- **Matrix builds**: Build multiple targets (api, web) in parallel
 
 ### ESLint Configuration
 The project uses modern ESLint flat config (eslint.config.js) with:
@@ -964,6 +1208,55 @@ Reset the database (development only):
 cd backend
 rm db.sqlite3
 poetry run python manage.py migrate
+```
+
+**Environment Variable Issues**
+If settings aren't being read from `.env`:
+1. Ensure `.env` file is in the `backend/` directory (same level as `manage.py`)
+2. Check for typos in variable names
+3. Restart the Django server after changing `.env`
+
+**Production Database Connection Errors**
+When `DJANGO_PROD=True`:
+1. Verify all `DB_*` environment variables are set
+2. Check PostgreSQL is running and accessible
+3. Verify database credentials are correct
+4. Ensure the database exists: `createdb ansible_ui`
+
+### Docker Issues
+
+**Build Failures**
+If `docker-compose build` fails:
+1. Check Docker daemon is running: `docker ps`
+2. Ensure sufficient disk space: `docker system df`
+3. Clear build cache: `docker builder prune`
+4. Check `package-mode = false` has been removed from `backend/pyproject.toml`
+
+**Container Won't Start**
+If containers exit immediately:
+1. Check logs: `docker-compose logs api` or `docker-compose logs web`
+2. Verify `.env` file exists and has correct values
+3. Check port 80 isn't already in use: `lsof -i :80`
+4. Verify PostgreSQL is healthy: `docker-compose ps db`
+
+**Database Connection Issues**
+If API can't connect to database:
+1. Ensure `DB_HOSTNAME=db` (matches service name in docker-compose.yml)
+2. Check database is running: `docker-compose ps db`
+3. View database logs: `docker-compose logs db`
+4. Verify environment variables match: `docker-compose exec api env | grep DB_`
+
+**Static Files Not Loading**
+If CSS/JS don't load:
+1. Verify `collectstatic` ran: `docker-compose logs api | grep collectstatic`
+2. Check nginx config: `docker-compose exec web cat /etc/nginx/conf.d/nginx.conf`
+3. Rebuild web service: `docker-compose build web`
+
+**Permission Denied on entrypoint.api.sh**
+If you see "permission denied" errors:
+```bash
+chmod +x docker/entrypoint.api.sh
+docker-compose build api
 ```
 
 ## License
