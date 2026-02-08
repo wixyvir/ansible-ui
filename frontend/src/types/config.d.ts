@@ -1,10 +1,10 @@
-interface AnsibleUIConfig {
+interface AnsibleauConfig {
   backendUri: string;
 }
 
 declare global {
   interface Window {
-    ANSIBLE_UI_CONFIG: AnsibleUIConfig;
+    ANSIBEAU_CONFIG: AnsibleauConfig;
   }
 }
 

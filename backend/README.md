@@ -1,10 +1,10 @@
-# Ansible UI Backend
+# Ansibeau Backend
 
-Django REST Framework backend for the Ansible UI project. This backend processes Ansible execution logs, stores them in a database, and provides a REST API for the frontend to consume.
+Django REST Framework backend for the Ansibeau project. This backend processes Ansible execution logs, stores them in a database, and provides a REST API for the frontend to consume.
 
 ## Overview
 
-The backend is part of the Ansible UI project (v0.3.0) and serves as the data layer for displaying Ansible play execution results. It uses Django 5.2+ with Django REST Framework for API endpoints.
+The backend is part of the Ansibeau project (v0.3.0) and serves as the data layer for displaying Ansible play execution results. It uses Django 5.2+ with Django REST Framework for API endpoints.
 
 ## Technology Stack
 
@@ -20,7 +20,7 @@ The backend is part of the Ansible UI project (v0.3.0) and serves as the data la
 
 ```
 backend/
-├── ansible_ui/          # Main Django project
+├── ansibeau/          # Main Django project
 │   ├── settings.py     # Configuration
 │   ├── urls.py         # Root URL routing
 │   ├── wsgi.py         # WSGI application
@@ -368,7 +368,7 @@ The backend is configured to allow requests from the frontend development server
 
 - **Allowed Origins**: `http://localhost:5173` (Vite dev server)
 
-To add more origins, update `CORS_ALLOWED_ORIGINS` in [ansible_ui/settings.py](ansible_ui/settings.py).
+To add more origins, update `CORS_ALLOWED_ORIGINS` in [ansibeau/settings.py](ansibeau/settings.py).
 
 ### Database
 
@@ -379,7 +379,7 @@ Currently using SQLite for development (`db.sqlite3`). For production, consider 
 - **Permissions**: `AllowAny` (open for development)
 - **Pagination**: Page number pagination with 100 items per page
 
-Update `REST_FRAMEWORK` settings in [ansible_ui/settings.py](ansible_ui/settings.py) as needed.
+Update `REST_FRAMEWORK` settings in [ansibeau/settings.py](ansibeau/settings.py) as needed.
 
 ## Relationship to Frontend
 
@@ -456,4 +456,4 @@ The workflow only triggers when backend files are modified.
 
 ## License
 
-This project is for internal use. Part of the Ansible UI project.
+This project is for internal use. Part of the Ansibeau project.

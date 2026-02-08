@@ -12,7 +12,7 @@ export function ServerCard({ host }: ServerCardProps) {
     const hasChangedPlays = host.plays.some(play => play.status === 'changed');
 
     if (hasFailedPlays) return 'text-red-400';
-    if (hasChangedPlays) return 'text-blue-400';
+    if (hasChangedPlays) return 'text-yellow-400';
     return 'text-green-400';
   };
 

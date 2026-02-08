@@ -11,4 +11,4 @@ echo 'Running migrations...'
 django-admin migrate
 
 echo 'Starting service...'
-exec gunicorn --bind 0.0.0.0:8000 --workers=4 ansible_ui.wsgi
+exec gunicorn --bind 0.0.0.0:8000 --workers=4 ansibeau.wsgi

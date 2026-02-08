@@ -1,4 +1,4 @@
-# Ansible UI
+# Ansibeau
 
 A modern React web application that displays comprehensive views of Ansible Play execution results with a professional, clean, and elegant dark mode interface.
 

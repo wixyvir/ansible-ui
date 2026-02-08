@@ -603,6 +603,6 @@ class TaskAdmin(admin.ModelAdmin):
 
 
 # Admin Site Customization
-admin.site.site_header = "Ansible UI Administration"
-admin.site.site_title = "Ansible UI Admin"
+admin.site.site_header = "Ansibeau Administration"
+admin.site.site_title = "Ansibeau Admin"
 admin.site.index_title = "Manage Ansible Execution Logs"
