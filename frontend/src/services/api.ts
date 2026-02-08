@@ -1,7 +1,11 @@
 import { Log, Task, PlayStatus } from '../types/ansible';
 
 const getBackendUri = (): string => {
-  return window.ANSIBLE_UI_CONFIG?.backendUri || 'http://localhost:8000';
+  const config = window.ANSIBEAU_CONFIG;
+  if (config && typeof config.backendUri === 'string') {
+    return config.backendUri.replace(/\/+$/, '');
+  }
+  return 'http://localhost:8000';
 };
 
 export const fetchLog = async (logId: string): Promise<Log> => {

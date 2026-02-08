@@ -35,9 +35,9 @@ function LogPage() {
 
   useEffect(() => {
     if (log) {
-      document.title = `${log.title} - Ansible UI`;
+      document.title = `${log.title} - Ansibeau`;
     } else {
-      document.title = 'Ansible UI - Play Results';
+      document.title = 'Ansibeau - Play Results';
     }
   }, [log]);
 

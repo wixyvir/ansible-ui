@@ -5,7 +5,7 @@ services:
     build:
       context: .
       target: api
-    image: ghcr.io/wixyvir/ansible-ui/api:${DOCKER_TAG:-latest}
+    image: ghcr.io/wixyvir/ansibeau/api:${DOCKER_TAG:-latest}
     env_file:
       - ./.env
     depends_on:
@@ -24,9 +24,11 @@ services:
     build:
       context: .
       target: web
-    image: ghcr.io/wixyvir/ansible-ui/web:${DOCKER_TAG:-latest}
+    image: ghcr.io/wixyvir/ansibeau/web:${DOCKER_TAG:-latest}
     ports:
       - "8000:80"
+    environment:
+      - BACKEND_URI=${BACKEND_URI:-}
     depends_on:
       - api
 

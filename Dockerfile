@@ -22,7 +22,7 @@ ENV PATH="/root/.local/bin:$PATH"
 ADD backend/README.md /app/README.md
 ADD backend/manage.py /app/manage.py
 ADD backend/pyproject.toml /app/pyproject.toml
-ADD backend/ansible_ui /app/ansible_ui
+ADD backend/ansibeau /app/ansibeau
 ADD backend/api /app/api
 
 WORKDIR /app
@@ -40,12 +40,12 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PYTHONUNBUFFERED=1
 
 ENV DJANGO_PROD=True
-ENV DJANGO_SETTINGS_MODULE=ansible_ui.settings
+ENV DJANGO_SETTINGS_MODULE=ansibeau.settings
 ENV DJANGO_STATIC_ROOT=/var/www/html/static/
 ENV DJANGO_ALLOWED_HOSTS=localhost:8000
 
-ENV DB_NAME=ansible_ui
-ENV DB_USERNAME=ansible_ui
+ENV DB_NAME=ansibeau
+ENV DB_USERNAME=ansibeau
 ENV DB_PASSWORD=none
 ENV DB_HOSTNAME=db
 ENV DB_PORT=5432
@@ -61,7 +61,7 @@ RUN pip3.11 install gunicorn
 
 # Copy and install built package
 COPY --from=backend-builder /app/dist/* /dist/
-RUN pip3.11 install ./dist/ansible_ui_backend-*.tar.gz
+RUN pip3.11 install ./dist/ansibeau_backend-*.tar.gz
 
 # Collect static files
 RUN django-admin collectstatic --no-input
@@ -81,4 +81,10 @@ COPY --from=api /var/www/html/static/ /var/www/html/static/
 RUN rm /etc/nginx/conf.d/default.conf
 COPY docker/nginx.conf /etc/nginx/conf.d
 
+# Copy entrypoint script for runtime config generation
+COPY docker/entrypoint.web.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
+
+ENTRYPOINT ["/entrypoint.sh"]

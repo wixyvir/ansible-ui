@@ -1,10 +1,10 @@
-# Ansible UI
+# Ansibeau
 
 A modern web application for visualizing Ansible playbook execution results with a clean, professional interface.
 
 ## Overview
 
-Ansible UI provides DevOps teams and system administrators with an intuitive way to monitor and understand Ansible playbook execution results. Instead of parsing through terminal logs, users can see hosts, plays, and task summaries in a beautifully designed dark-mode interface.
+Ansibeau provides DevOps teams and system administrators with an intuitive way to monitor and understand Ansible playbook execution results. Instead of parsing through terminal logs, users can see hosts, plays, and task summaries in a beautifully designed dark-mode interface.
 
 ## Features
 
@@ -60,7 +60,7 @@ Backend runs at: `http://localhost:8000`
 ## Project Structure
 
 ```
-ansible-ui/
+ansibeau/
 ├── .github/workflows/     # CI/CD pipelines
 │   ├── docker-build.yml   # Docker build & push to GHCR
 │   └── python-lint.yml    # Python linting
@@ -73,7 +73,7 @@ ansible-ui/
 │   └── package.json
 │
 ├── backend/               # Django REST API backend
-│   ├── ansible_ui/        # Django project config
+│   ├── ansibeau/        # Django project config
 │   ├── api/               # REST API app
 │   │   ├── models.py      # Database models
 │   │   ├── serializers.py # DRF serializers
@@ -83,6 +83,7 @@ ansible-ui/
 │
 ├── docker/                # Docker configuration
 │   ├── entrypoint.api.sh  # API startup script
+│   ├── entrypoint.web.sh  # Web startup script (generates runtime config)
 │   └── nginx.conf         # nginx config
 │
 ├── Dockerfile             # Multi-stage build
@@ -198,6 +199,11 @@ docker-compose exec api django-admin createsuperuser
 
 Access at: `http://localhost:8000`
 
+**Frontend Backend URI**: By default, the frontend uses relative URLs (via nginx proxy) which works out of the box with Docker. To point the frontend at a different backend, set `BACKEND_URI` in your `.env`:
+```bash
+BACKEND_URI=https://api.example.com
+```
+
 ### Using Pre-built Images from GHCR
 
 Docker images are automatically built and pushed to GitHub Container Registry on every push.
@@ -212,8 +218,8 @@ docker-compose up -d
 ```
 
 **Available images:**
-- `ghcr.io/wixyvir/ansible-ui/api:latest`
-- `ghcr.io/wixyvir/ansible-ui/web:latest`
+- `ghcr.io/wixyvir/ansibeau/api:latest`
+- `ghcr.io/wixyvir/ansibeau/web:latest`
 
 **Branch tags:** Use `DOCKER_TAG=branch-name` to pull specific branch builds.
 

@@ -1,8 +1,8 @@
-# Ansible UI - Project Documentation
+# Ansibeau - Project Documentation
 
 ## Overview
 
-Ansible UI is a modern web application designed to display comprehensive views of Ansible Play execution results in a clean, professional, and visually appealing interface. The application focuses on presenting hosts and their associated plays with detailed task summaries.
+Ansibeau is a modern web application designed to display comprehensive views of Ansible Play execution results in a clean, professional, and visually appealing interface. The application focuses on presenting hosts and their associated plays with detailed task summaries.
 
 ## Project Purpose
 
@@ -51,7 +51,7 @@ The primary goal is to provide DevOps teams and system administrators with an in
 ### Project Structure
 
 ```
-ansible-ui/
+ansibeau/
 ├── frontend/               # React frontend application
 │   ├── src/
 │   │   ├── components/    # React components
@@ -61,7 +61,7 @@ ansible-ui/
 │   └── package.json       # Frontend dependencies
 │
 ├── backend/               # Django REST API backend
-│   ├── ansible_ui/       # Django project configuration
+│   ├── ansibeau/       # Django project configuration
 │   │   ├── settings.py   # Django settings (CORS, DRF, decouple)
 │   │   └── urls.py       # Root URL routing
 │   ├── api/              # REST API Django app
@@ -82,6 +82,7 @@ ansible-ui/
 │
 ├── docker/                # Docker configuration files
 │   ├── entrypoint.api.sh # API container startup script
+│   ├── entrypoint.web.sh # Web container startup script (generates runtime config.js)
 │   └── nginx.conf        # nginx reverse proxy configuration
 │
 ├── .github/               # GitHub configuration
@@ -365,6 +366,7 @@ The backend uses `python-decouple` for environment variable management. Settings
 | `DB_PASSWORD` | PostgreSQL password | Required if `DJANGO_PROD=True` |
 | `DB_HOSTNAME` | PostgreSQL host | Required if `DJANGO_PROD=True` |
 | `DB_PORT` | PostgreSQL port | Required if `DJANGO_PROD=True` |
+| `BACKEND_URI` | Frontend backend URI (empty = relative URLs via nginx proxy) | Empty (Docker), `http://localhost:8000` (dev) |
 
 **Development** (no `.env` file needed - defaults work):
 ```bash
@@ -378,7 +380,7 @@ DJANGO_SECRET=your-secure-secret-key
 DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
 DJANGO_STATIC_ROOT=/var/www/static
 CSRF_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
-DB_NAME=ansible_ui
+DB_NAME=ansibeau
 DB_USERNAME=postgres
 DB_PASSWORD=your-secure-password
 DB_HOSTNAME=localhost
@@ -432,16 +434,21 @@ The project includes production-ready Docker configuration with multi-stage buil
 - `web`: nginx (external port 8000)
 
 **nginx routing:**
+- `/config.js` → Runtime-generated frontend config (no-cache headers)
 - `/` → React frontend (SPA with fallback routing)
 - `/api/` → Django API backend
 - `/admin/` → Django admin interface
 - `/static/` → Django static files
+
+**Runtime frontend configuration:**
+The web container generates `/var/www/html/frontend/config.js` at startup from the `BACKEND_URI` environment variable. This allows the frontend's backend URI to be configured at deploy time without rebuilding the Docker image. By default, `BACKEND_URI` is empty, which means the frontend uses relative URLs (e.g., `/api/logs/...`) — this works out of the box with the nginx proxy. Set `BACKEND_URI=https://api.example.com` to point the frontend at an external backend.
 
 **Environment variables** (same as development, defined in `.env`):
 - `DJANGO_PROD=True` (enables PostgreSQL, disables DEBUG)
 - `DJANGO_SECRET` (secure random secret key)
 - `DJANGO_ALLOWED_HOSTS` (comma-separated domains)
 - `DB_*` variables for PostgreSQL connection
+- `BACKEND_URI` (frontend backend URI, empty = relative URLs via nginx proxy)
 
 **Production notes:**
 - Change all default passwords and secrets
@@ -461,8 +468,8 @@ The project includes automated Docker image builds via GitHub Actions.
 - Pull request to main → Build only (no push)
 
 **Images Published:**
-- `ghcr.io/wixyvir/ansible-ui/api:<tag>`
-- `ghcr.io/wixyvir/ansible-ui/web:<tag>`
+- `ghcr.io/wixyvir/ansibeau/api:<tag>`
+- `ghcr.io/wixyvir/ansibeau/web:<tag>`
 
 **Tagging Strategy:**
 | Event | Tags |
@@ -610,9 +617,10 @@ The frontend fetches data from the backend API:
 - **Production Ready**: Full deployment configuration with security best practices
 - **.env.production Template**: Example production environment configuration
 - **GitHub Actions CI/CD**: Automated Docker image builds on push to any branch
-- **GitHub Container Registry (GHCR)**: Docker images published to `ghcr.io/wixyvir/ansible-ui/api` and `ghcr.io/wixyvir/ansible-ui/web`
+- **GitHub Container Registry (GHCR)**: Docker images published to `ghcr.io/wixyvir/ansibeau/api` and `ghcr.io/wixyvir/ansibeau/web`
 - **Branch-based Tagging**: Images tagged with branch name (sanitized), `latest` for main, and SHA prefix for traceability
 - **Build Caching**: GitHub Actions cache for faster Docker builds
+- **Runtime Frontend Config**: External `config.js` generated at container startup from `BACKEND_URI` env var, with no-cache nginx headers
 
 ### Database Models
 
@@ -932,6 +940,9 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - [frontend/tailwind.config.js](frontend/tailwind.config.js) - Tailwind CSS configuration
 - [frontend/postcss.config.js](frontend/postcss.config.js) - PostCSS plugins
 
+### Frontend Public Files
+- [frontend/public/config.js](frontend/public/config.js) - Runtime backend URI configuration (dev default: `http://localhost:8000`, overwritten in Docker by entrypoint)
+
 ### Frontend Source Files
 - [frontend/src/main.tsx](frontend/src/main.tsx) - React application entry point
 - [frontend/src/App.tsx](frontend/src/App.tsx) - Main application component with React Router
@@ -953,10 +964,10 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 - [backend/.env.example](backend/.env.example) - Environment variables template
 
 ### Backend Source Files
-- [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py) - Django settings (apps, middleware, CORS, DRF, CSRF)
-- [backend/ansible_ui/urls.py](backend/ansible_ui/urls.py) - Root URL configuration
-- [backend/ansible_ui/wsgi.py](backend/ansible_ui/wsgi.py) - WSGI application
-- [backend/ansible_ui/asgi.py](backend/ansible_ui/asgi.py) - ASGI application
+- [backend/ansibeau/settings.py](backend/ansibeau/settings.py) - Django settings (apps, middleware, CORS, DRF, CSRF)
+- [backend/ansibeau/urls.py](backend/ansibeau/urls.py) - Root URL configuration
+- [backend/ansibeau/wsgi.py](backend/ansibeau/wsgi.py) - WSGI application
+- [backend/ansibeau/asgi.py](backend/ansibeau/asgi.py) - ASGI application
 - [backend/api/views.py](backend/api/views.py) - API view implementations (LogViewSet, PlayViewSet)
 - [backend/api/urls.py](backend/api/urls.py) - API URL routing
 - [backend/api/models.py](backend/api/models.py) - Database models (Log, Host, Play, Task)
@@ -975,6 +986,7 @@ Access the admin at `http://localhost:8000/admin/` after creating a superuser.
 
 ### Docker Configuration Files
 - [docker/entrypoint.api.sh](docker/entrypoint.api.sh) - API container startup script (waits for DB, runs migrations, starts gunicorn)
+- [docker/entrypoint.web.sh](docker/entrypoint.web.sh) - Web container startup script (generates `config.js` from `BACKEND_URI` env var, then starts nginx)
 - [docker/nginx.conf](docker/nginx.conf) - nginx configuration for reverse proxy and static file serving
 
 ## Design Decisions
@@ -1199,7 +1211,7 @@ poetry install
 **CORS Errors**
 If frontend can't connect to backend:
 1. Verify backend is running on `http://localhost:8000`
-2. Check `CORS_ALLOWED_ORIGINS` in [backend/ansible_ui/settings.py](backend/ansible_ui/settings.py)
+2. Check `CORS_ALLOWED_ORIGINS` in [backend/ansibeau/settings.py](backend/ansibeau/settings.py)
 3. Ensure `corsheaders` middleware is configured
 
 **Database Migration Errors**
@@ -1221,7 +1233,7 @@ When `DJANGO_PROD=True`:
 1. Verify all `DB_*` environment variables are set
 2. Check PostgreSQL is running and accessible
 3. Verify database credentials are correct
-4. Ensure the database exists: `createdb ansible_ui`
+4. Ensure the database exists: `createdb ansibeau`
 
 ### Docker Issues
 
@@ -1252,11 +1264,11 @@ If CSS/JS don't load:
 2. Check nginx config: `docker-compose exec web cat /etc/nginx/conf.d/nginx.conf`
 3. Rebuild web service: `docker-compose build web`
 
-**Permission Denied on entrypoint.api.sh**
+**Permission Denied on entrypoint scripts**
 If you see "permission denied" errors:
 ```bash
-chmod +x docker/entrypoint.api.sh
-docker-compose build api
+chmod +x docker/entrypoint.api.sh docker/entrypoint.web.sh
+docker-compose build
 ```
 
 ## License
