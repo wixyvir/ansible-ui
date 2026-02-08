@@ -1,5 +1,6 @@
 """Service module for parsing Ansible logs using ansible-output-parser."""
 
+import json
 import re
 import tempfile
 import traceback
@@ -157,8 +158,8 @@ class LogParserService:
         # Extract hosts from recap
         hosts = self._extract_hosts_from_recap(parser)
 
-        # Extract tasks from plays
-        tasks = self._extract_tasks_from_plays(parser, content)
+        # Extract tasks directly from raw content (handles serial execution)
+        tasks = self._extract_tasks_from_content(content, play_names)
 
         if not hosts:
             return ParseResult(
@@ -198,10 +199,9 @@ class LogParserService:
         try:
             log_parser = Logs(log_file=tmp_path)
 
-            # Collect all hosts, plays, and tasks from all parsed plays
+            # Collect all hosts and plays from all parsed plays
             all_hosts: dict[str, ParsedHost] = {}
             all_play_names: list[str] = []
-            all_tasks: list[ParsedTask] = []
 
             for play in log_parser.plays:
                 # Get play names
@@ -226,9 +226,13 @@ class LogParserService:
                     else:
                         all_hosts[host.hostname] = host
 
-                # Extract tasks from this play
-                tasks = self._extract_tasks_from_plays(play, content)
-                all_tasks.extend(tasks)
+            # Strip timestamps from content for task extraction
+            stripped_content = self._strip_timestamps(content)
+
+            # Extract tasks directly from raw content (handles serial execution)
+            all_tasks = self._extract_tasks_from_content(
+                stripped_content, all_play_names
+            )
 
             if not all_hosts:
                 return ParseResult(
@@ -258,6 +262,34 @@ class LogParserService:
                 os.unlink(tmp_path)
             except OSError:
                 pass
+
+    def _strip_timestamps(self, content: str) -> str:
+        """
+        Strip timestamp prefixes from log lines.
+
+        Converts lines like "2024-01-15 10:30:00,000 | TASK [name]"
+        to "TASK [name]" for consistent parsing.
+
+        Args:
+            content: Raw timestamped log content
+
+        Returns:
+            Content with timestamp prefixes removed
+        """
+        lines = content.split("\n")
+        stripped = []
+        for line in lines:
+            match = self.TIMESTAMP_PATTERN.match(line)
+            if match:
+                # Remove the timestamp prefix (everything up to and including " | ")
+                pipe_idx = line.find(" | ")
+                if pipe_idx != -1:
+                    stripped.append(line[pipe_idx + 3 :])
+                else:
+                    stripped.append(line)
+            else:
+                stripped.append(line)
+        return "\n".join(stripped)
 
     def _extract_plays_with_line_numbers(
         self, content: str, play_names: list[str]
@@ -329,73 +361,214 @@ class LogParserService:
 
         return hosts
 
-    def _extract_tasks_from_plays(self, parser: Play, content: str) -> list[ParsedTask]:
+    # Pattern to match task status lines
+    # e.g., "ok: [hostname]", "failed: [host] (item=x)"
+    STATUS_PATTERN = re.compile(
+        r"(ok|changed|failed|fatal|skipping|unreachable|ignored|rescued)"
+        r":\s+\[([^\]]+)\]",
+        re.IGNORECASE,
+    )
+
+    def _extract_tasks_from_content(
+        self, content: str, play_names: list[str]
+    ) -> list[ParsedTask]:
         """
-        Extract task-level data from parsed plays.
+        Parse tasks directly from raw content, handling serial execution.
+
+        When Ansible uses `serial`, the same PLAY header appears multiple times
+        (once per batch). The ansible-output-parser library loses earlier batches.
+        This method parses the raw content directly and merges results across
+        serial batches using (play_name, task_name, order_within_play) as key.
 
         Args:
-            parser: Play parser instance with parsed data
-            content: Raw log content for line number extraction
+            content: Raw log content (with timestamps already stripped if needed)
+            play_names: List of known play names (used for validation)
 
         Returns:
-            List of ParsedTask objects with executions per host
+            List of ParsedTask objects with per-host results merged across batches
         """
-        tasks: list[ParsedTask] = []
-        task_order = 0
+        lines = content.split("\n")
 
-        # parser.plays() returns Dict[play_name, Dict[task_name, Tasks]]
-        plays_data = parser.plays()
+        current_play: Optional[str] = None
+        # Track task order per play; resets to 0 on each PLAY header (for merging)
+        play_task_order: dict[str, int] = {}
+        # Key: (play_name, task_name, order) -> ParsedTask
+        task_map: dict[tuple[str, str, int], ParsedTask] = {}
 
-        for play_name, play_tasks in plays_data.items():
-            for task_name, task_obj in play_tasks.items():
-                results: list[ParsedTaskResult] = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
 
-                # task_obj.results returns List[{host, status, failure_message}]
-                task_results = getattr(task_obj, "results", [])
-                for result in task_results:
-                    hostname = result.get("host", "")
-                    status = result.get("status", "ok")
-                    message = result.get("failure_message") or None
+            # Check for PLAY header
+            if stripped.startswith("PLAY ["):
+                play_match = self.PLAY_PATTERN.search(stripped)
+                if play_match:
+                    current_play = play_match.group(1)
+                    # Reset order to 0 for each PLAY section (serial batches
+                    # repeat the same play, so resetting allows merging by order)
+                    play_task_order[current_play] = 0
+                i += 1
+                continue
 
-                    results.append(
-                        ParsedTaskResult(
-                            hostname=hostname,
-                            status=status,
-                            message=message,
-                        )
-                    )
+            # Check for TASK header
+            if stripped.startswith("TASK [") and current_play is not None:
+                task_match = self.TASK_PATTERN.search(stripped)
+                if task_match:
+                    task_name = task_match.group(1)
+                    task_line_number = i + 1  # 1-indexed
+                    order = play_task_order.get(current_play, 0)
+                    play_task_order[current_play] = order + 1
 
-                # Find line number for this task
-                line_number = self._find_task_line_number(content, task_name)
+                    key = (current_play, task_name, order)
 
-                tasks.append(
-                    ParsedTask(
-                        name=task_name,
-                        order=task_order,
-                        play_name=play_name,
-                        line_number=line_number,
-                        results=results,
-                    )
-                )
-                task_order += 1
+                    # Parse following lines for host results until next section
+                    i += 1
+                    while i < len(lines):
+                        result_line = lines[i]
+                        result_stripped = result_line.strip()
 
-        return tasks
+                        # Stop at next section boundary
+                        if (
+                            result_stripped.startswith("TASK [")
+                            or result_stripped.startswith("PLAY [")
+                            or result_stripped.startswith("PLAY RECAP")
+                        ):
+                            break
 
-    def _find_task_line_number(self, content: str, task_name: str) -> Optional[int]:
+                        # Try to match status line
+                        status_match = self.STATUS_PATTERN.match(result_stripped)
+                        if status_match:
+                            task_status = status_match.group(1).lower()
+                            hostname = status_match.group(2)
+                            failure_msg = None
+
+                            # Extract failure message from JSON block
+                            if task_status in ("failed", "fatal"):
+                                failure_msg = self._extract_failure_message(lines, i)
+
+                            # Get or create ParsedTask
+                            if key not in task_map:
+                                task_map[key] = ParsedTask(
+                                    name=task_name,
+                                    order=order,
+                                    play_name=current_play,
+                                    line_number=task_line_number,
+                                    results=[],
+                                )
+
+                            # Merge: add result, replacing any existing result
+                            # for this host (later batch wins)
+                            existing_task = task_map[key]
+                            # Remove previous result for this host if any
+                            existing_task.results = [
+                                r
+                                for r in existing_task.results
+                                if r.hostname != hostname
+                            ]
+                            existing_task.results.append(
+                                ParsedTaskResult(
+                                    hostname=hostname,
+                                    status=task_status,
+                                    message=failure_msg,
+                                )
+                            )
+
+                        i += 1
+                    continue
+
+                i += 1
+                continue
+
+            i += 1
+
+        return list(task_map.values())
+
+    def _extract_failure_message(
+        self, lines: list[str], status_line_idx: int
+    ) -> Optional[str]:
         """
-        Find the line number where a task is defined.
+        Extract failure message from a failed/fatal task result line.
+
+        Handles two formats:
+        1. Inline JSON: `failed: [host] => {"msg": "error message"}`
+        2. Multiline JSON block following the status line
 
         Args:
-            content: Raw log content
-            task_name: Name of the task to find
+            lines: All log lines
+            status_line_idx: Index of the failed/fatal status line
 
         Returns:
-            Line number (1-indexed) or None if not found
+            The failure message string, or None if not found
         """
-        for line_num, line in enumerate(content.split("\n"), start=1):
-            match = self.TASK_PATTERN.search(line)
-            if match and match.group(1) == task_name:
-                return line_num
+        status_line = lines[status_line_idx]
+
+        # Check for inline JSON: "=> { ... }" on the same line
+        arrow_idx = status_line.find("=> {")
+        if arrow_idx != -1:
+            json_str = status_line[arrow_idx + 3 :].strip()
+            msg = self._parse_msg_from_json(json_str)
+            if msg:
+                return msg
+
+            # If single-line JSON didn't work, try multiline from this line
+            json_lines = [status_line[arrow_idx + 3 :].strip()]
+            for j in range(status_line_idx + 1, min(status_line_idx + 100, len(lines))):
+                json_lines.append(lines[j].strip())
+                if lines[j].strip() == "}":
+                    break
+            json_text = "\n".join(json_lines)
+            msg = self._parse_msg_from_json(json_text)
+            if msg:
+                return msg
+
+        # Check next line for "=> {" pattern (some formats put it on the next line)
+        if status_line_idx + 1 < len(lines):
+            next_line = lines[status_line_idx + 1].strip()
+            if next_line.startswith("=> {"):
+                json_lines = [next_line[3:].strip()]
+                for j in range(
+                    status_line_idx + 2, min(status_line_idx + 100, len(lines))
+                ):
+                    json_lines.append(lines[j].strip())
+                    if lines[j].strip() == "}":
+                        break
+                json_text = "\n".join(json_lines)
+                msg = self._parse_msg_from_json(json_text)
+                if msg:
+                    return msg
+
+        # Fallback: try regex on nearby lines for "msg" field
+        for j in range(status_line_idx, min(status_line_idx + 50, len(lines))):
+            line = lines[j].strip()
+            # Stop if we hit another task/play section
+            if line.startswith("TASK [") or line.startswith("PLAY ["):
+                break
+            msg_match = re.search(r'"msg":\s*"((?:[^"\\]|\\.)*)"', line)
+            if msg_match:
+                return msg_match.group(1)
+
+        return None
+
+    def _parse_msg_from_json(self, json_str: str) -> Optional[str]:
+        """
+        Try to parse a JSON string and extract the 'msg' field.
+
+        Args:
+            json_str: JSON string (potentially malformed)
+
+        Returns:
+            The 'msg' value or None
+        """
+        try:
+            data = json.loads(json_str)
+            if isinstance(data, dict) and "msg" in data:
+                msg = data["msg"]
+                if isinstance(msg, list):
+                    return "\n".join(str(item) for item in msg)
+                return str(msg)
+        except (json.JSONDecodeError, ValueError):
+            pass
         return None
 
 

@@ -820,11 +820,27 @@ The `LogParserService` in [backend/api/services/log_parser.py](backend/api/servi
 
 **Parsing Process:**
 1. Auto-detect format based on first line
-2. Parse using `ansible-output-parser` library
+2. Parse using `ansible-output-parser` library for PLAY RECAP (host aggregate counts)
 3. Extract hosts from PLAY RECAP section
-4. Extract play names with line numbers
-5. Extract tasks with per-host status and failure messages
+4. Extract play names with line numbers (first occurrence for serial batches)
+5. **Custom task extraction** from raw content (handles serial execution and duplicate task names)
 6. Determine status per host (failed > changed > ok)
+
+**Task Extraction (Custom Parser):**
+
+The `_extract_tasks_from_content()` method parses raw log content directly instead of relying on the `ansible-output-parser` library's `plays()` method. This is necessary because the library has two limitations:
+
+1. **Serial execution**: When Ansible uses `serial`, the same PLAY header repeats per batch. The library resets play data on each occurrence, losing earlier batches' tasks.
+2. **Duplicate task names**: Tasks stored by name within a play cause later occurrences to overwrite earlier ones.
+
+The custom parser:
+- Tracks current play name from PLAY headers
+- Resets task order counter on each PLAY header (enabling merge across serial batches)
+- Uses `(play_name, task_name, order)` as composite key to merge results
+- Extracts failure messages from inline/multiline JSON blocks after `failed:`/`fatal:` lines
+- Handles `delegate_to` syntax (`Host: [hostname] -> delegated_host`)
+
+For timestamped logs, `_strip_timestamps()` removes timestamp prefixes before task extraction.
 
 **Data Classes:**
 - `ParsedHost`: hostname, ok, changed, failed, unreachable, skipped, rescued, ignored
