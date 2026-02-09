@@ -1,7 +1,7 @@
 {
   "name": "ansibeau",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "A comprehensive web UI for displaying Ansible Play results",
   "scripts": {

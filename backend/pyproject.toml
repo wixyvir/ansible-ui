@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ansibeau-backend"
-version = "0.2.0"
+version = "0.5.0"
 description = "Django REST Framework backend for Ansibeau - processes Ansible logs and provides REST API"
 authors = ["Cyprien"]
 packages = [{include = "api"}, {include = "ansibeau"}]
